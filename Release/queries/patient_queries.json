@@ -1,5 +1,11 @@
 [
 {
+"patientID": 8837,
+"studyID": 3,
+"startTimestamp": 1641024390,
+"endTimestamp": 1641047888
+},
+{
  "patientID": 2642,
  "studyID": 52,
  "startTimestamp": 1663313370,
