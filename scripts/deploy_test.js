@@ -35,23 +35,30 @@ async function main() {
     console.timeEnd("insertion")
 
     console.time("researcher query")
+    // patientIDs = await deployedContract.queryForResearcher(
+    //     researcherqueries[0]["studyID"],
+    //     researcherqueries[0]["timestamp"],
+    //     researcherqueries[0]["categorySharingChoices"],
+    //     researcherqueries[0]["elementSharingChoices"]
+    // )
     patientIDs = await deployedContract.queryForResearcher(
-        researcherqueries[0]["studyID"],
-        researcherqueries[0]["timestamp"],
-        researcherqueries[0]["categorySharingChoices"],
-        researcherqueries[0]["elementSharingChoices"]
+        3,
+        1641053693,
+        ["03_Living Environment and Lifestyle", "04_Biospecimen", "05_Socioeconomic Status", "07_Laboratory Test Results"],
+        ["01_02_Mental health disease or condition", "01_03_Sexual or reproductive disease or condition"]
     )
-    const regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
     console.timeEnd("researcher query")
+    const regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
     console.log(regularIntList)
 
     console.time("patient query")
-    outputstring = await deployedContract.queryForPatient(
-        patientqueries[0]["patientID"],
-        patientqueries[0]["studyID"],
-        patientqueries[0]["startTimestamp"],
-        patientqueries[0]["endTimestamp"]
-    )
+    // outputstring = await deployedContract.queryForPatient(
+    //     patientqueries[0]["patientID"],
+    //     patientqueries[0]["studyID"],
+    //     patientqueries[0]["startTimestamp"],
+    //     patientqueries[0]["endTimestamp"]
+    // )
+    outputstring = await deployedContract.queryForPatient(8837, 3, 1641024390, 1641047888)
     console.timeEnd("patient query")
     console.log(outputstring)
 

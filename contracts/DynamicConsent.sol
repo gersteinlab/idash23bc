@@ -54,7 +54,8 @@ contract DynamicConsent {
     // globalID=> entry
     mapping(uint256 => Entry) public entryDatabase;
     // globalID => choices
-    mapping(uint256 => uint16[]) public choicesDatabase;
+    mapping(uint256 => uint16[]) public catChoicesDatabase;
+    mapping(uint256 => uint16[]) public eleChoicesDatabase;
 
     // patientID => studyID => list of globalID
     mapping(int256 => mapping(int256 => uint256[])) queryMapping;
@@ -103,21 +104,11 @@ contract DynamicConsent {
 
     function testD(string memory s) public view returns (uint256) {
         bytes memory b = bytes(s);
-        uint16 m = uint16(
-            (uint8(b[0]) - 48) *
-                1000 +
-                (uint8(b[1]) - 48) *
-                100 +
-                (uint8(b[3]) - 48) *
-                10 +
-                (uint8(b[4]) - 48)
-        );
+        uint16 m = uint16((uint8(b[0]) - 48) * 1000 + (uint8(b[1]) - 48) * 100 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
         return elementsMapping[m];
     }
 
-    function testE(
-        string memory s
-    ) public pure returns (string memory, string memory) {
+    function testE(string memory s) public pure returns (string memory, string memory) {
         bytes memory b = bytes(s);
 
         string memory A = string(abi.encodePacked(b[0], b[1]));
@@ -126,10 +117,7 @@ contract DynamicConsent {
         return (A, B);
     }
 
-    function testC(
-        uint256 A,
-        uint256 B
-    ) public pure returns (uint256[] memory) {
+    function testC(uint256 A, uint256 B) public pure returns (uint256[] memory) {
         uint256[] memory result;
 
         assembly {
@@ -150,22 +138,14 @@ contract DynamicConsent {
         return latestIDs.length;
     }
 
-    function testB(
-        string[] calldata _patientElementChoices
-    ) public returns (uint256) {
+    function testB(string[] calldata _patientElementChoices) public returns (uint256) {
         uint256 e = _patientElementChoices.length;
         bytes memory b;
         uint16 ce;
 
         for (uint256 i = 0; i < e; i++) {
             b = bytes(_patientElementChoices[i]);
-            ce = uint16(
-                (uint8(b[0]) - 48) *
-                    1000 +
-                    (uint8(b[3]) - 48) *
-                    10 +
-                    (uint8(b[4]) - 48)
-            );
+            ce = uint16((uint8(b[0]) - 48) * 1000 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
             uint16 temp = uint16((uint8(b[1]) - 48));
             temp *= 100;
             ce += temp; // need to seperate this out or a bug happens (no idea why)
@@ -185,10 +165,7 @@ contract DynamicConsent {
         return 1;
     }
 
-    function getLatestIDs(
-        uint256 _studyID,
-        int256 _endTime
-    ) public view returns (uint256[] memory latestIDs) {
+    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs) {
         unchecked {
             uint256[] memory hits = queryMapping[-1][int(_studyID)];
 
@@ -204,9 +181,7 @@ contract DynamicConsent {
 
             // restrict by endtime first
             if (_endTime != -1) {
-                while (
-                    int256(entryDatabase[hits[h - 1]].timestamp) > _endTime
-                ) {
+                while (int256(entryDatabase[hits[h - 1]].timestamp) > _endTime) {
                     h--;
                     if (h == 0) {
                         return EMPTYARRAY;
@@ -248,10 +223,7 @@ contract DynamicConsent {
                         // store their latest globalID in return array
                         mstore(latestIDs, patientCounter)
                         // latestIDs[patientCounter]
-                        mstore(
-                            add(latestIDs, mul(patientCounter, 32)),
-                            mload(add(hits, mul(i, 0x20)))
-                        )
+                        mstore(add(latestIDs, mul(patientCounter, 32)), mload(add(hits, mul(i, 0x20))))
                     }
                 }
             }
@@ -281,27 +253,27 @@ contract DynamicConsent {
 
     function encodePatient(uint256 globalID) public view returns (uint256) {
         uint256 result;
-        uint16[] memory choices = choicesDatabase[globalID];
+        uint16[] memory cChoices = catChoicesDatabase[globalID];
+        uint16[] memory eChoices = eleChoicesDatabase[globalID];
 
-        uint256 c = choices.length;
+        uint256 c = cChoices.length;
+        uint256 e = eChoices.length;
 
         unchecked {
             for (uint256 i = 0; i < c; i++) {
-                result |= elementsMapping[choices[i]];
+                result |= elementsMapping[cChoices[i]];
+            }
+            for (uint256 i = 0; i < e; i++) {
+                result |= elementsMapping[eChoices[i]];
             }
         }
 
         return result;
     }
 
-    function isMatch(
-        uint256 patientPrefs,
-        uint256 queryPrefs
-    ) public pure returns (bool) {
+    function isMatch(uint256 patientPrefs, uint256 queryPrefs) public pure returns (bool) {
         // see https://en.wikipedia.org/wiki/Material_conditional
-        return
-            (type(uint256).max ^ queryPrefs ^ (queryPrefs & patientPrefs)) ==
-            type(uint256).max;
+        return (type(uint256).max ^ queryPrefs ^ (queryPrefs & patientPrefs)) == type(uint256).max;
     }
 
     // perform log base 10
@@ -414,7 +386,7 @@ contract DynamicConsent {
                 // convert category/element string to int: ex "11_05" becomes 1105
                 ce = uint16((uint8(b[0]) - 48) * 10 + (uint8(b[1]) - 48));
                 // store it
-                choicesDatabase[gCounter].push(ce);
+                catChoicesDatabase[gCounter].push(ce);
                 // if we haven't seen this category/element yet
                 if (keccak256(bytes(choicesDict[ce])) == EMPTYSTRING) {
                     // keep track of what the string was
@@ -425,18 +397,12 @@ contract DynamicConsent {
 
             for (uint256 i = 0; i < e; i++) {
                 b = bytes(_patientElementChoices[i]);
-                ce = uint16(
-                    (uint8(b[0]) - 48) *
-                        1000 +
-                        (uint8(b[3]) - 48) *
-                        10 +
-                        (uint8(b[4]) - 48)
-                );
+                ce = uint16((uint8(b[0]) - 48) * 1000 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
                 uint16 temp = uint16((uint8(b[1]) - 48));
                 temp *= 100;
                 ce += temp; // STILL no idea why this bug happens
 
-                choicesDatabase[gCounter].push(ce);
+                eleChoicesDatabase[gCounter].push(ce);
                 // if we haven't seen this category/element yet
                 if (keccak256(bytes(choicesDict[ce])) == EMPTYSTRING) {
                     // keep track of what the string was
@@ -453,28 +419,17 @@ contract DynamicConsent {
 
             // create entryString
             // assembly version is better
-            string memory entryString = string.concat(
-                toString(_studyID),
-                ",",
-                toString(_recordTime),
-                ",["
-            );
+            string memory entryString = string.concat(toString(_studyID), ",", toString(_recordTime), ",[");
 
             for (uint256 i = 0; i < c; i++) {
-                entryString = string.concat(
-                    entryString,
-                    _patientCategoryChoices[i]
-                );
+                entryString = string.concat(entryString, _patientCategoryChoices[i]);
                 if (i < c - 1) {
                     entryString = string.concat(entryString, ",");
                 }
             }
             entryString = string.concat(entryString, "],[");
             for (uint256 i = 0; i < e; i++) {
-                entryString = string.concat(
-                    entryString,
-                    _patientElementChoices[i]
-                );
+                entryString = string.concat(entryString, _patientElementChoices[i]);
                 if (i < e - 1) {
                     entryString = string.concat(entryString, ",");
                 }
@@ -516,13 +471,12 @@ contract DynamicConsent {
         string[] calldata _requestedElementChoices
     ) public view returns (uint256[] memory) {
         uint256[] memory result;
-        uint256 c = _requestedCategoryChoices.length;
-        uint256 e = _requestedElementChoices.length;
         uint256 encodeQuery;
         uint16 temp;
         uint256 i;
+        bool doSimple = false;
         unchecked {
-            for (i = 0; i < c; i++) {
+            for (i = 0; i < _requestedCategoryChoices.length; i++) {
                 temp = choicesLookup[_requestedCategoryChoices[i]];
                 if (temp != 0) {
                     encodeQuery |= elementsMapping[temp];
@@ -532,11 +486,14 @@ contract DynamicConsent {
                 }
             }
 
-            for (i = 0; i < e; i++) {
+            for (i = 0; i < _requestedElementChoices.length; i++) {
                 temp = choicesLookup[_requestedElementChoices[i]];
                 if (temp != 0) {
                     encodeQuery |= elementsMapping[temp];
-                } // TODO: if element doesn't exist, we need to do a manual search
+                } else {
+                    doSimple = true;
+                    break;
+                }
             }
 
             uint256[] memory LatestIDs = getLatestIDs(_studyID, _endTime);
@@ -552,13 +509,33 @@ contract DynamicConsent {
                 // be careful we do not allocate more memory after this point!
             }
 
-            for (i = 0; i < h; i++) {
-                if (isMatch(encodePatient(LatestIDs[i]), encodeQuery)) {
-                    resultCounter++;
-                    pID = entryDatabase[LatestIDs[i]].patientID;
-                    assembly {
-                        mstore(result, resultCounter)
-                        mstore(add(result, mul(resultCounter, 32)), pID)
+            if (doSimple) {
+                uint16[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
+                uint16[] memory RequestElement = getElementIndex(_requestedElementChoices);
+
+                uint16[] memory PatientCategory;
+                uint16[] memory PatientElement;
+                for (i = 0; i < h; i++) {
+                    PatientCategory = catChoicesDatabase[LatestIDs[i]];
+                    PatientElement = eleChoicesDatabase[LatestIDs[i]];
+                    if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
+                        resultCounter++;
+                        pID = entryDatabase[LatestIDs[i]].patientID;
+                        assembly {
+                            mstore(result, resultCounter)
+                            mstore(add(result, mul(resultCounter, 32)), pID)
+                        }
+                    }
+                }
+            } else {
+                for (i = 0; i < h; i++) {
+                    if (isMatch(encodePatient(LatestIDs[i]), encodeQuery)) {
+                        resultCounter++;
+                        pID = entryDatabase[LatestIDs[i]].patientID;
+                        assembly {
+                            mstore(result, resultCounter)
+                            mstore(add(result, mul(resultCounter, 32)), pID)
+                        }
                     }
                 }
             }
@@ -587,12 +564,7 @@ contract DynamicConsent {
      *   Return:
      *       String of concatenated consent history: string memory
      */
-    function queryForPatient(
-        uint256 _patientID,
-        int256 _studyID,
-        int256 _startTime,
-        int256 _endTime
-    ) public view returns (string memory) {
+    function queryForPatient(uint256 _patientID, int256 _studyID, int256 _startTime, int256 _endTime) public view returns (string memory) {
         uint256[] memory hits = queryMapping[int(_patientID)][_studyID];
         uint256 h = hits.length;
         string memory result;
@@ -603,10 +575,7 @@ contract DynamicConsent {
             for (uint256 i = 0; i < h; i++) {
                 // if hit is valid
                 Entry memory entry = entryDatabase[hits[i]];
-                if (
-                    (_startTime == -1 || uint(_startTime) <= entry.timestamp) &&
-                    (_endTime == -1 || uint(_endTime) >= entry.timestamp)
-                ) {
+                if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
                     result = string.concat(result, toEntryString[hits[i]]);
                 }
             }
@@ -614,27 +583,19 @@ contract DynamicConsent {
         return result;
     }
 
-    function getCategoryIndex(
-        string[] calldata _CategoryChoices
-    ) public pure returns (uint256[] memory) {
+    function getCategoryIndex(string[] calldata _CategoryChoices) public pure returns (uint16[] memory) {
         uint256 n = _CategoryChoices.length;
-        uint256[] memory Category_index = new uint256[](n);
+        uint16[] memory Category_index = new uint16[](n);
         for (uint256 i = 0; i < n; i++) {
             bytes memory current_string = bytes(_CategoryChoices[i]);
-            Category_index[i] = uint16(
-                (uint8(current_string[0]) - 48) *
-                    10 +
-                    (uint8(current_string[1]) - 48)
-            );
+            Category_index[i] = uint16((uint8(current_string[0]) - 48) * 10 + (uint8(current_string[1]) - 48));
         }
         return Category_index;
     }
 
-    function getElementIndex(
-        string[] calldata _ElementChoices
-    ) public pure returns (uint256[] memory) {
+    function getElementIndex(string[] calldata _ElementChoices) public pure returns (uint16[] memory) {
         uint256 n = _ElementChoices.length;
-        uint256[] memory Element_index = new uint256[](n);
+        uint16[] memory Element_index = new uint16[](n);
 
         for (uint256 i = 0; i < n; i++) {
             bytes memory current_string = bytes(_ElementChoices[i]);
@@ -653,10 +614,7 @@ contract DynamicConsent {
     }
 
     // Function to check if array 'a' is a subset of array 'b' assuming 'a' and 'b' are both sorted
-    function isSubset(
-        uint256[] memory a,
-        uint256[] memory b
-    ) public pure returns (bool) {
+    function isSubset(uint16[] memory a, uint16[] memory b) public pure returns (bool) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
         if (aLength > bLength) {
@@ -679,13 +637,10 @@ contract DynamicConsent {
         return aIndex == a.length;
     }
 
-    function getDifference(
-        uint256[] memory a,
-        uint256[] memory b
-    ) public pure returns (uint256[] memory) {
+    function getDifference(uint16[] memory a, uint16[] memory b) public pure returns (uint16[] memory) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
-        uint[] memory difference = new uint[](a.length);
+        uint16[] memory difference = new uint16[](a.length);
         uint count = 0;
         uint256 i = 0;
         uint256 j = 0;
@@ -709,44 +664,51 @@ contract DynamicConsent {
             i++;
             count++;
         }
-        uint[] memory result = new uint[](count);
+        uint16[] memory result = new uint16[](count);
         for (uint k = 0; k < count; k++) {
             //return only the category information of the differentce
-            result[k] = uint(difference[k] / 100);
+            result[k] = uint16(difference[k] / 100);
         }
         return result;
     }
 
     function isMatchSimple(
-        string[] calldata _patientCategoryChoices,
-        string[] calldata _patientElementChoices,
-        string[] calldata _requestedCategoryChoices,
-        string[] calldata _requestedElementChoices
+        uint16[] memory PatientCategory,
+        uint16[] memory RequestCategory,
+        uint16[] memory PatientElement,
+        uint16[] memory RequestElement
     ) public pure returns (bool) {
         // all the inputs are lists of strings
-        uint256[] memory PatientCategory = getCategoryIndex(
-            _patientCategoryChoices
-        );
-        uint256[] memory RequestCategory = getCategoryIndex(
-            _requestedCategoryChoices
-        );
         if (isSubset(RequestCategory, PatientCategory) == false) {
             return false;
         }
-        uint256[] memory PatientElement = getElementIndex(
-            _patientElementChoices
-        );
-        uint256[] memory RequestElement = getElementIndex(
-            _requestedElementChoices
-        );
-        uint256[] memory difference = getDifference(
-            RequestElement,
-            PatientElement
-        );
+        uint16[] memory difference = getDifference(RequestElement, PatientElement);
         if (difference.length == 0) {
             return true;
         } else {
             return isSubset(difference, PatientCategory);
         }
     }
+
+    // function isMatchSimple_old(
+    //     string[] calldata _patientCategoryChoices,
+    //     string[] calldata _patientElementChoices,
+    //     string[] calldata _requestedCategoryChoices,
+    //     string[] calldata _requestedElementChoices
+    // ) public pure returns (bool) {
+    //     // all the inputs are lists of strings
+    //     uint256[] memory PatientCategory = getCategoryIndex(_patientCategoryChoices);
+    //     uint256[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
+    //     if (isSubset(RequestCategory, PatientCategory) == false) {
+    //         return false;
+    //     }
+    //     uint256[] memory PatientElement = getElementIndex(_patientElementChoices);
+    //     uint256[] memory RequestElement = getElementIndex(_requestedElementChoices);
+    //     uint256[] memory difference = getDifference(RequestElement, PatientElement);
+    //     if (difference.length == 0) {
+    //         return true;
+    //     } else {
+    //         return isSubset(difference, PatientCategory);
+    //     }
+    // }
 }
