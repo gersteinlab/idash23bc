@@ -672,6 +672,37 @@ contract DynamicConsent {
         return result;
     }
 
+    function remove_dup(uint16[] memory a) public pure returns (uint16[] memory) {
+        uint length = a.length;
+        uint uniqueCount = 1;
+        bool[] memory whetherDup = new bool[](length);
+        whetherDup[0] = false;
+        // Count the number of unique elements
+        for (uint i = 1; i < length; i++) {
+            bool isDuplicate = false;
+            if (a[i] == a[i - 1]) {
+                isDuplicate = true;
+                whetherDup[i] = true;
+            }
+
+            if (!isDuplicate) {
+                whetherDup[i] = false;
+                uniqueCount++;
+            }
+        }
+        // Create a new array to store the unique elements
+        uint16[] memory uniqueArray = new uint16[](uniqueCount);
+        uint currentIndex = 0;
+        // Fill the uniqueArray with unique elements
+        for (uint i = 0; i < length; i++) {
+            if (whetherDup[i] == false) {
+                uniqueArray[currentIndex] = a[i];
+                currentIndex++;
+            }
+        }
+        return uniqueArray;
+    }
+
     function isMatchSimple(
         uint16[] memory PatientCategory,
         uint16[] memory RequestCategory,
@@ -686,6 +717,7 @@ contract DynamicConsent {
         if (difference.length == 0) {
             return true;
         } else {
+            difference = remove_dup(difference);
             return isSubset(difference, PatientCategory);
         }
     }
