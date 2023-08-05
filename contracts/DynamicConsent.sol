@@ -419,23 +419,23 @@ contract DynamicConsent {
 
             // create entryString
             // assembly version is better
-            string memory entryString = string.concat(toString(_studyID), ",", toString(_recordTime), ",[");
+            // string memory entryString = string.concat(toString(_studyID), ",", toString(_recordTime), ",[");
 
-            for (uint256 i = 0; i < c; i++) {
-                entryString = string.concat(entryString, _patientCategoryChoices[i]);
-                if (i < c - 1) {
-                    entryString = string.concat(entryString, ",");
-                }
-            }
-            entryString = string.concat(entryString, "],[");
-            for (uint256 i = 0; i < e; i++) {
-                entryString = string.concat(entryString, _patientElementChoices[i]);
-                if (i < e - 1) {
-                    entryString = string.concat(entryString, ",");
-                }
-            }
-            entryString = string.concat(entryString, "]\n");
-            toEntryString[gCounter] = entryString;
+            // for (uint256 i = 0; i < c; i++) {
+            //     entryString = string.concat(entryString, _patientCategoryChoices[i]);
+            //     if (i < c - 1) {
+            //         entryString = string.concat(entryString, ",");
+            //     }
+            // }
+            // entryString = string.concat(entryString, "],[");
+            // for (uint256 i = 0; i < e; i++) {
+            //     entryString = string.concat(entryString, _patientElementChoices[i]);
+            //     if (i < e - 1) {
+            //         entryString = string.concat(entryString, ",");
+            //     }
+            // }
+            // entryString = string.concat(entryString, "]\n");
+            // toEntryString[gCounter] = entryString;
 
             // For all possible queries of patient ID and study ID, append globalID to querymap
             // can patient ID be -1?
@@ -572,15 +572,48 @@ contract DynamicConsent {
             return result;
         }
         unchecked {
-            for (uint256 i = 0; i < h; i++) {
+            uint256 i;
+            for (i = 0; i < h; i++) {
                 // if hit is valid
                 Entry memory entry = entryDatabase[hits[i]];
                 if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
-                    result = string.concat(result, toEntryString[hits[i]]);
+                    result = string.concat(result, getEntryString(hits[i]));
                 }
             }
         }
         return result;
+    }
+
+    function getEntryString(uint256 globalID) public view returns (string memory) {
+        uint256 j;
+        uint256 c;
+        uint256 e;
+
+        uint16[] memory PatientCategory;
+        uint16[] memory PatientElement;
+        Entry memory entry = entryDatabase[globalID];
+        PatientCategory = catChoicesDatabase[globalID];
+        PatientElement = eleChoicesDatabase[globalID];
+        c = PatientCategory.length;
+        e = PatientElement.length;
+
+        string memory entryString = string.concat(toString(uint256(entry.studyID)), ",", toString(entry.timestamp), ",[");
+
+        for (j = 0; j < c; j++) {
+            entryString = string.concat(entryString, choicesDict[PatientCategory[j]]);
+            if (j < c - 1) {
+                entryString = string.concat(entryString, ",");
+            }
+        }
+        entryString = string.concat(entryString, "],[");
+        for (j = 0; j < e; j++) {
+            entryString = string.concat(entryString, choicesDict[PatientElement[j]]);
+            if (j < e - 1) {
+                entryString = string.concat(entryString, ",");
+            }
+        }
+        entryString = string.concat(entryString, "]\n");
+        return entryString;
     }
 
     function getCategoryIndex(string[] calldata _CategoryChoices) public pure returns (uint16[] memory) {
