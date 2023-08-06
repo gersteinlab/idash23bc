@@ -108,13 +108,12 @@ contract DynamicConsent {
         return elementsMapping[m];
     }
 
-    function testE(string memory s) public pure returns (string memory, string memory) {
-        bytes memory b = bytes(s);
-
-        string memory A = string(abi.encodePacked(b[0], b[1]));
-        string memory B = string(abi.encodePacked(b[3], b[4]));
-
-        return (A, B);
+    function testE() public pure returns (uint256) {
+        uint256 result;
+        assembly {
+            result := choicesDict.slot
+        }
+        return result;
     }
 
     function testC(uint256 A, uint256 B) public pure returns (uint256[] memory) {
@@ -130,12 +129,26 @@ contract DynamicConsent {
         return result;
     }
 
-    function testG(uint256 A) public pure returns (uint256) {
-        uint256[] memory latestIDs = new uint256[](10);
+    function testF(string memory A) public pure returns (uint256) {
+        uint256 result;
         assembly {
-            mstore(latestIDs, A)
+            result := mload(A)
         }
-        return latestIDs.length;
+        return result;
+    }
+
+    function testG(uint256 A) public view returns (bytes32, string memory) {
+        uint256 slot;
+        bytes32 result;
+        assembly {
+            slot := choicesDict.slot
+            mstore(0, A)
+            mstore(0x20, slot)
+            let ptr := keccak256(0, 0x40)
+            result := mload(0x40)
+            mstore(result, sload(ptr))
+        }
+        return (result, string(abi.encodePacked(result)));
     }
 
     function testB(string[] calldata _patientElementChoices) public returns (uint256) {
@@ -370,9 +383,10 @@ contract DynamicConsent {
         string[] calldata _patientElementChoices
     ) public {
         // Store entry in entryDatabase
-        entryDatabase[gCounter].patientID = int(_patientID);
-        entryDatabase[gCounter].studyID = int(_studyID);
-        entryDatabase[gCounter].timestamp = _recordTime;
+        // entryDatabase[gCounter].patientID = int(_patientID);
+        // entryDatabase[gCounter].studyID = int(_studyID);
+        // entryDatabase[gCounter].timestamp = _recordTime;
+        entryDatabase[gCounter] = Entry({patientID: int(_patientID), studyID: int(_studyID), timestamp: _recordTime});
         //entryDatabase[gCounter].SharingChoices = encode(_patientCategoryChoices, _patientElementChoices);
 
         uint256 c = _patientCategoryChoices.length;
@@ -506,7 +520,6 @@ contract DynamicConsent {
 
             assembly {
                 result := add(mload(0x40), 32)
-                // be careful we do not allocate more memory after this point!
             }
 
             if (doSimple) {
@@ -577,11 +590,139 @@ contract DynamicConsent {
                 // if hit is valid
                 Entry memory entry = entryDatabase[hits[i]];
                 if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
-                    result = string.concat(result, getEntryString(hits[i]));
+                    result = string.concat(result, getEntryStringA(hits[i]));
                 }
             }
         }
         return result;
+    }
+
+    // function getStringLength(string memory A) public pure returns (uint256){
+    //     uint256 l;
+    //     assembly{
+    //         l := mload(A)
+    //     }
+    //     return l;
+    // }
+
+    function getTestA(string memory temp) public pure returns (string memory) {
+        string memory entryString = "hooooh";
+        int len;
+        uint dest;
+        uint src;
+
+        assembly {
+            len := mload(temp)
+            dest := add(add(entryString, 32), mload(entryString))
+            src := add(temp, 32)
+        }
+        for (; len >= 0; len -= 32) {
+            assembly {
+                mstore(dest, mload(src))
+            }
+            dest += 32;
+            src += 32;
+        }
+        assembly {
+            mstore(entryString, add(mload(entryString), mload(temp)))
+            mstore(0x40, 1000)
+        }
+        return entryString;
+    }
+
+    function getEntryStringA(uint256 globalID) public view returns (string memory) {
+        uint16[] memory PatientCategory;
+        uint16[] memory PatientElement;
+        PatientCategory = catChoicesDatabase[globalID];
+        PatientElement = eleChoicesDatabase[globalID];
+        uint c = PatientCategory.length;
+        uint e = PatientElement.length;
+        string memory temp;
+
+        int len;
+        uint dest;
+        uint src;
+
+        string memory entryString;
+
+        entryString = string.concat(toString(uint256(entryDatabase[globalID].studyID)), ",", toString(entryDatabase[globalID].timestamp), ",[");
+
+        for (uint j = 0; j < c; j++) {
+            // this is needed to not overwrite entryString
+            // assumes that each string is less than 256 char long
+            assembly {
+                mstore(0x40, add(mload(0x40), 256))
+            }
+            temp = choicesDict[PatientCategory[j]];
+
+            assembly {
+                len := mload(temp)
+                dest := add(add(entryString, 32), mload(entryString))
+                src := add(temp, 32)
+            }
+            for (; len >= 0; len -= 32) {
+                assembly {
+                    mstore(dest, mload(src))
+                }
+                dest += 32;
+                src += 32;
+            }
+            assembly {
+                mstore(entryString, add(mload(entryString), mload(temp)))
+                mstore(0x40, dest)
+            }
+            if (j < c - 1) {
+                assembly {
+                    mstore(add(add(entryString, 32), mload(entryString)), ",")
+                    mstore(entryString, add(mload(entryString), 1))
+                }
+            }
+        }
+
+        assembly {
+            mstore(add(add(entryString, 32), mload(entryString)), "],[")
+            mstore(entryString, add(mload(entryString), 3))
+        }
+
+        for (uint j = 0; j < e; j++) {
+            // this is needed to not overwrite entryString
+            // assumes that each string is less than 256 char long
+            assembly {
+                mstore(0x40, add(mload(0x40), 256))
+            }
+            temp = choicesDict[PatientElement[j]];
+
+            assembly {
+                len := mload(temp)
+                dest := add(add(entryString, 32), mload(entryString))
+                src := add(temp, 32)
+            }
+            for (; len >= 0; len -= 32) {
+                assembly {
+                    mstore(dest, mload(src))
+                }
+                dest += 32;
+                src += 32;
+            }
+            assembly {
+                mstore(entryString, add(mload(entryString), mload(temp)))
+                mstore(0x40, dest)
+            }
+            if (j < e - 1) {
+                assembly {
+                    mstore(add(add(entryString, 32), mload(entryString)), ",")
+                    mstore(entryString, add(mload(entryString), 1))
+                }
+            }
+        }
+
+        assembly {
+            mstore(add(add(entryString, 32), mload(entryString)), "]\n")
+            // why is length of "]\n" equal to 2?
+            mstore(entryString, add(mload(entryString), 2))
+        }
+
+        return entryString;
     }
 
     function getEntryString(uint256 globalID) public view returns (string memory) {
