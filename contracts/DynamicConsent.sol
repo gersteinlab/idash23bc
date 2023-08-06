@@ -585,12 +585,45 @@ contract DynamicConsent {
             return result;
         }
         unchecked {
+            string memory temp;
+
+            int len;
+            uint dest;
+            uint src;
             uint256 i;
+            bool init;
+
             for (i = 0; i < h; i++) {
                 // if hit is valid
                 Entry memory entry = entryDatabase[hits[i]];
                 if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
-                    result = string.concat(result, getEntryStringA(hits[i]));
+                    // result = string.concat(result, getEntryStringA(hits[i]));
+                    if (!init) {
+                        result = getEntryStringA(hits[i]);
+                        init = true;
+                    } else {
+                        assembly {
+                            mstore(0x40, add(mload(0x40), 64))
+                        }
+                        temp = getEntryStringA(hits[i]);
+
+                        assembly {
+                            len := mload(temp)
+                            dest := add(add(result, 32), mload(result))
+                            src := add(temp, 32)
+                            mstore(result, add(mload(result), mload(temp)))
+                        }
+                        for (; len >= 0; len -= 32) {
+                            assembly {
+                                mstore(dest, mload(src))
+                            }
+                            dest += 32;
+                            src += 32;
+                        }
+                        assembly {
+                            mstore(0x40, dest)
+                        }
+                    }
                 }
             }
         }
@@ -649,9 +682,8 @@ contract DynamicConsent {
 
         for (uint j = 0; j < c; j++) {
             // this is needed to not overwrite entryString
-            // assumes that each string is less than 256 char long
             assembly {
-                mstore(0x40, add(mload(0x40), 256))
+                mstore(0x40, add(mload(0x40), 64))
             }
             temp = choicesDict[PatientCategory[j]];
 
@@ -659,6 +691,7 @@ contract DynamicConsent {
                 len := mload(temp)
                 dest := add(add(entryString, 32), mload(entryString))
                 src := add(temp, 32)
+                mstore(entryString, add(mload(entryString), mload(temp)))
             }
             for (; len >= 0; len -= 32) {
                 assembly {
@@ -668,7 +701,6 @@ contract DynamicConsent {
                 src += 32;
             }
             assembly {
-                mstore(entryString, add(mload(entryString), mload(temp)))
                 mstore(0x40, dest)
             }
             if (j < c - 1) {
