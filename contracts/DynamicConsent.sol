@@ -38,6 +38,7 @@ contract DynamicConsent {
     uint256 eCounter = 0;
 
     uint256[] EMPTYARRAY = new uint256[](0);
+    int256[] EMPTYARRAYI = new int256[](0);
 
     bytes32 private constant EMPTYSTRING = keccak256(bytes(""));
 
@@ -178,18 +179,17 @@ contract DynamicConsent {
         return 1;
     }
 
-    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs) {
+    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
         unchecked {
             uint256[] memory hits = queryMapping[-1][int(_studyID)];
 
             uint256 h = hits.length;
             int256 pID;
-            uint256 latestGID;
             uint256 i;
             uint256 j;
 
             if (h == 0) {
-                return EMPTYARRAY;
+                return (EMPTYARRAY, pIDList);
             }
 
             // restrict by endtime first
@@ -197,20 +197,17 @@ contract DynamicConsent {
                 while (int256(entryDatabase[hits[h - 1]].timestamp) > _endTime) {
                     h--;
                     if (h == 0) {
-                        return EMPTYARRAY;
+                        return (EMPTYARRAY, pIDList);
                     }
                 }
             }
 
             // allocate memory for 2 arrays
             latestIDs = new uint256[](h);
-            int256[] memory pIDList;
+            pIDList = new int256[](h);
+            // int256[] memory pIDList;
             bool processed = false;
             uint256 patientCounter;
-            assembly {
-                pIDList := add(mload(0x40), 32)
-                // be careful we do not allocate more memory after this point!
-            }
 
             for (i = h; i > 0; i--) {
                 pID = entryDatabase[hits[i - 1]].patientID;
@@ -225,7 +222,6 @@ contract DynamicConsent {
 
                 if (!processed) {
                     patientCounter++;
-                    latestGID = hits[i - 1];
                     assembly {
                         // store patient ID in list to keep track of which ones we've added
                         mstore(pIDList, patientCounter)
@@ -234,17 +230,19 @@ contract DynamicConsent {
                         // mstore(0x40, add(pIDList,add(0x20,mul(patientCounter,0x20))))
 
                         // store their latest globalID in return array
-                        mstore(latestIDs, patientCounter)
                         // latestIDs[patientCounter]
                         mstore(add(latestIDs, mul(patientCounter, 32)), mload(add(hits, mul(i, 0x20))))
                     }
                 }
             }
             if (patientCounter == 0) {
-                return EMPTYARRAY;
+                return (EMPTYARRAY, pIDList);
             }
+            assembly {
+                mstore(latestIDs, patientCounter)
+            }
+            return (latestIDs, pIDList);
         }
-        return latestIDs;
     }
 
     // function encode(string[] memory CategoryChoices, string[] memory ElementChoices) public view returns(uint256) {
@@ -487,10 +485,10 @@ contract DynamicConsent {
         uint256[] memory result;
         uint256 encodeQuery;
         uint16 temp;
-        uint256 i;
+        //uint256 i;
         bool doSimple = false;
         unchecked {
-            for (i = 0; i < _requestedCategoryChoices.length; i++) {
+            for (uint256 i = 0; i < _requestedCategoryChoices.length; i++) {
                 temp = choicesLookup[_requestedCategoryChoices[i]];
                 if (temp != 0) {
                     encodeQuery |= elementsMapping[temp];
@@ -500,7 +498,7 @@ contract DynamicConsent {
                 }
             }
 
-            for (i = 0; i < _requestedElementChoices.length; i++) {
+            for (uint256 i = 0; i < _requestedElementChoices.length; i++) {
                 temp = choicesLookup[_requestedElementChoices[i]];
                 if (temp != 0) {
                     encodeQuery |= elementsMapping[temp];
@@ -510,17 +508,17 @@ contract DynamicConsent {
                 }
             }
 
-            uint256[] memory LatestIDs = getLatestIDs(_studyID, _endTime);
+            uint256[] memory LatestIDs;
+            int256[] memory pIDList;
+            (LatestIDs, pIDList) = getLatestIDs(_studyID, _endTime);
+            // TODO: could return the list of patient IDs here so I don't have to look them up again
             uint256 h = LatestIDs.length;
             if (h == 0) {
                 return EMPTYARRAY;
             }
             uint256 resultCounter;
             int256 pID;
-
-            assembly {
-                result := add(mload(0x40), 32)
-            }
+            result = new uint256[](LatestIDs.length);
 
             if (doSimple) {
                 uint16[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
@@ -528,12 +526,12 @@ contract DynamicConsent {
 
                 uint16[] memory PatientCategory;
                 uint16[] memory PatientElement;
-                for (i = 0; i < h; i++) {
+                for (uint256 i = 0; i < h; i++) {
                     PatientCategory = catChoicesDatabase[LatestIDs[i]];
                     PatientElement = eleChoicesDatabase[LatestIDs[i]];
                     if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
                         resultCounter++;
-                        pID = entryDatabase[LatestIDs[i]].patientID;
+                        pID = pIDList[i];
                         assembly {
                             mstore(result, resultCounter)
                             mstore(add(result, mul(resultCounter, 32)), pID)
@@ -541,10 +539,10 @@ contract DynamicConsent {
                     }
                 }
             } else {
-                for (i = 0; i < h; i++) {
+                for (uint256 i = 0; i < h; i++) {
                     if (isMatch(encodePatient(LatestIDs[i]), encodeQuery)) {
                         resultCounter++;
-                        pID = entryDatabase[LatestIDs[i]].patientID;
+                        pID = pIDList[i];
                         assembly {
                             mstore(result, resultCounter)
                             mstore(add(result, mul(resultCounter, 32)), pID)

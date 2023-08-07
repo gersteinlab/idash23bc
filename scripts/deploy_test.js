@@ -31,18 +31,18 @@ async function main() {
     console.timeEnd("insertion")
 
     console.time("researcher query")
-    patientIDs = await deployedContract.queryForResearcher(
-        researcherqueries[0]["studyID"],
-        researcherqueries[0]["timestamp"],
-        researcherqueries[0]["categorySharingChoices"],
-        researcherqueries[0]["elementSharingChoices"]
-    )
     // patientIDs = await deployedContract.queryForResearcher(
-    //     3,
-    //     1641053693,
-    //     ["03_Living Environment and Lifestyle", "04_Biospecimen", "05_Socioeconomic Status", "07_Laboratory Test Results"],
-    //     ["01_02_Mental health disease or condition", "01_01_Sexual or reproductive disease or condition"]
+    //     researcherqueries[0]["studyID"],
+    //     researcherqueries[0]["timestamp"],
+    //     researcherqueries[0]["categorySharingChoices"],
+    //     researcherqueries[0]["elementSharingChoices"]
     // )
+    patientIDs = await deployedContract.queryForResearcher(
+        3,
+        1641053693,
+        ["03_Living Environment and Lifestyle", "04_Biospecimen", "05_Socioeconomic Status", "07_Laboratory Test Results"],
+        ["01_02_Mental health disease or condition", "01_03_Sexual or reproductive disease or condition"]
+    )
     console.timeEnd("researcher query")
     const regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
     console.log(regularIntList)
