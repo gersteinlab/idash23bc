@@ -409,10 +409,10 @@ contract DynamicConsent {
 
             for (uint256 i = 0; i < e; i++) {
                 b = bytes(_patientElementChoices[i]);
-                ce = uint16((uint8(b[0]) - 48) * 1000 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
-                uint16 temp = uint16((uint8(b[1]) - 48));
-                temp *= 100;
-                ce += temp; // STILL no idea why this bug happens
+                ce = uint16((uint8(b[0]) - 48) * 1000 + (uint16((uint8(b[1]) - 48)) * 1000) / 10 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
+                // uint16 temp = uint16((uint8(b[1]) - 48));
+                // temp *= 100;
+                // ce += temp; // STILL no idea why this bug happens
 
                 eleChoicesDatabase[gCounter].push(ce);
                 // if we haven't seen this category/element yet
@@ -421,11 +421,12 @@ contract DynamicConsent {
                     choicesDict[ce] = _patientElementChoices[i];
                     choicesLookup[_patientElementChoices[i]] = ce;
                     // add it to element mapping
-                    elementsMapping[ce] = 1 << eCounter;
+                    //xxxxxxxxxxxxxxxxxxelementsMapping[ce] = 1 << eCounter;
                     // keep track of category=>elements in the same mapping
-                    elementsMapping[ce / 100] |= 1 << eCounter;
+                    //xxxxxxxxxxxxxxxxxxelementsMapping[ce / 100] |= 1 << eCounter;
                     // TODO what happens when eCounter > 256 ... maybe a list of uint256 instead???
-                    eCounter++;
+
+                    //xxxxxxxxxxxxxxxxxxeCounter++;
                 }
             }
 
@@ -483,35 +484,34 @@ contract DynamicConsent {
         string[] calldata _requestedElementChoices
     ) public view returns (uint256[] memory) {
         uint256[] memory result;
-        uint256 encodeQuery;
-        uint16 temp;
+        //xxxxxxxxxxxxxxxxxxuint256 encodeQuery;
+        //xxxxxxxxxxxxxxxxxxuint16 temp;
         //uint256 i;
-        bool doSimple = false;
+        //xxxxxxxxxxxxxxxxxxbool doSimple = true;
         unchecked {
-            for (uint256 i = 0; i < _requestedCategoryChoices.length; i++) {
-                temp = choicesLookup[_requestedCategoryChoices[i]];
-                if (temp != 0) {
-                    encodeQuery |= elementsMapping[temp];
-                } else {
-                    // if looking up a category that doesnt exist, result is always empty since no patient has it
-                    return EMPTYARRAY;
-                }
-            }
+            // for (uint256 i = 0; i < _requestedCategoryChoices.length; i++) {
+            //     temp = choicesLookup[_requestedCategoryChoices[i]];
+            //     if (temp != 0) {
+            //         encodeQuery |= elementsMapping[temp];
+            //     } else {
+            //         // if looking up a category that doesnt exist, result is always empty since no patient has it
+            //         return EMPTYARRAY;
+            //     }
+            // }
 
-            for (uint256 i = 0; i < _requestedElementChoices.length; i++) {
-                temp = choicesLookup[_requestedElementChoices[i]];
-                if (temp != 0) {
-                    encodeQuery |= elementsMapping[temp];
-                } else {
-                    doSimple = true;
-                    break;
-                }
-            }
+            // for (uint256 i = 0; i < _requestedElementChoices.length; i++) {
+            //     temp = choicesLookup[_requestedElementChoices[i]];
+            //     if (temp != 0) {
+            //         encodeQuery |= elementsMapping[temp];
+            //     } else {
+            //         doSimple = true;
+            //         break;
+            //     }
+            // }
 
             uint256[] memory LatestIDs;
             int256[] memory pIDList;
             (LatestIDs, pIDList) = getLatestIDs(_studyID, _endTime);
-            // TODO: could return the list of patient IDs here so I don't have to look them up again
             uint256 h = LatestIDs.length;
             if (h == 0) {
                 return EMPTYARRAY;
@@ -520,36 +520,33 @@ contract DynamicConsent {
             int256 pID;
             result = new uint256[](LatestIDs.length);
 
-            if (doSimple) {
-                uint16[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
-                uint16[] memory RequestElement = getElementIndex(_requestedElementChoices);
+            uint16[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
+            uint16[] memory RequestElement = getElementIndex(_requestedElementChoices);
 
-                uint16[] memory PatientCategory;
-                uint16[] memory PatientElement;
-                for (uint256 i = 0; i < h; i++) {
-                    PatientCategory = catChoicesDatabase[LatestIDs[i]];
-                    PatientElement = eleChoicesDatabase[LatestIDs[i]];
-                    if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
-                        resultCounter++;
-                        pID = pIDList[i];
-                        assembly {
-                            mstore(result, resultCounter)
-                            mstore(add(result, mul(resultCounter, 32)), pID)
-                        }
-                    }
-                }
-            } else {
-                for (uint256 i = 0; i < h; i++) {
-                    if (isMatch(encodePatient(LatestIDs[i]), encodeQuery)) {
-                        resultCounter++;
-                        pID = pIDList[i];
-                        assembly {
-                            mstore(result, resultCounter)
-                            mstore(add(result, mul(resultCounter, 32)), pID)
-                        }
+            uint16[] memory PatientCategory;
+            uint16[] memory PatientElement;
+            for (uint256 i = 0; i < h; i++) {
+                PatientCategory = catChoicesDatabase[LatestIDs[i]];
+                PatientElement = eleChoicesDatabase[LatestIDs[i]];
+                if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
+                    resultCounter++;
+                    pID = pIDList[i];
+                    assembly {
+                        mstore(result, resultCounter)
+                        mstore(add(result, mul(resultCounter, 32)), pID)
                     }
                 }
             }
+            // for (uint256 i = 0; i < h; i++) {
+            //     if (isMatch(encodePatient(LatestIDs[i]), encodeQuery)) {
+            //         resultCounter++;
+            //         pID = pIDList[i];
+            //         assembly {
+            //             mstore(result, resultCounter)
+            //             mstore(add(result, mul(resultCounter, 32)), pID)
+            //         }
+            //     }
+            // }
             if (resultCounter == 0) {
                 return EMPTYARRAY;
             }
@@ -821,24 +818,26 @@ contract DynamicConsent {
     function isSubset(uint16[] memory a, uint16[] memory b) public pure returns (bool) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
-        if (aLength > bLength) {
-            return false; // If 'a' is larger than 'b', it can't be a subset
-        }
-        uint256 aIndex = 0;
-        uint256 bIndex = 0;
-        while (aIndex < a.length && bIndex < b.length) {
-            if (a[aIndex] < b[bIndex]) {
-                // If an element from 'a' is smaller than the current element in 'b',
-                // it cannot exist in 'b', and 'a' is not a subset of 'b'
-                return false;
-            } else if (a[aIndex] == b[bIndex]) {
-                // If the current elements are equal, move to the next element in both arrays
-                aIndex++;
+        unchecked {
+            if (aLength > bLength) {
+                return false; // If 'a' is larger than 'b', it can't be a subset
             }
-            bIndex++;
+            uint256 aIndex = 0;
+            uint256 bIndex = 0;
+            while (aIndex < a.length && bIndex < b.length) {
+                if (a[aIndex] < b[bIndex]) {
+                    // If an element from 'a' is smaller than the current element in 'b',
+                    // it cannot exist in 'b', and 'a' is not a subset of 'b'
+                    return false;
+                } else if (a[aIndex] == b[bIndex]) {
+                    // If the current elements are equal, move to the next element in both arrays
+                    aIndex++;
+                }
+                bIndex++;
+            }
+            // If we reached the end of 'a', then all elements in 'a' have been found in 'b'
+            return aIndex == a.length;
         }
-        // If we reached the end of 'a', then all elements in 'a' have been found in 'b'
-        return aIndex == a.length;
     }
 
     function getDifference(uint16[] memory a, uint16[] memory b) public pure returns (uint16[] memory) {
@@ -848,32 +847,40 @@ contract DynamicConsent {
         uint count = 0;
         uint256 i = 0;
         uint256 j = 0;
-        while (i < aLength && j < bLength) {
-            if (a[i] < b[j]) {
-                // Add the element from 'a' to the difference array
-                difference[count] = a[i];
+        uint16 atemp;
+        unchecked {
+            while (i < aLength && j < bLength) {
+                atemp = a[i];
+
+                if (atemp < b[j]) {
+                    if (count == 0 || difference[count - 1] != atemp / 100) {
+                        // Add the element from 'a' to the difference array
+                        difference[count] = atemp / 100;
+                        count++;
+                    }
+                    i++;
+                } else if (atemp > b[j]) {
+                    j++;
+                } else {
+                    // Both elements are equal, move to the next element in both arrays
+                    i++;
+                    j++;
+                }
+            }
+            // Add the remaining elements from 'a' to the difference array
+            while (i < aLength) {
+                atemp = a[i] / 100;
+                if (count == 0 || difference[count - 1] != atemp) {
+                    difference[count] = atemp;
+                    count++;
+                }
                 i++;
-                count++;
-            } else if (a[i] > b[j]) {
-                j++;
-            } else {
-                // Both elements are equal, move to the next element in both arrays
-                i++;
-                j++;
+            }
+            assembly {
+                mstore(difference, count)
             }
         }
-        // Add the remaining elements from 'a' to the difference array
-        while (i < aLength) {
-            difference[count] = a[i];
-            i++;
-            count++;
-        }
-        uint16[] memory result = new uint16[](count);
-        for (uint k = 0; k < count; k++) {
-            //return only the category information of the differentce
-            result[k] = uint16(difference[k] / 100);
-        }
-        return result;
+        return difference;
     }
 
     function remove_dup(uint16[] memory a) public pure returns (uint16[] memory) {
@@ -921,7 +928,6 @@ contract DynamicConsent {
         if (difference.length == 0) {
             return true;
         } else {
-            difference = remove_dup(difference);
             return isSubset(difference, PatientCategory);
         }
     }
