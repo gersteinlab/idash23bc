@@ -78,20 +78,7 @@ contract DynamicConsent {
 
     // TODO make everything that shouldn't be public not public
 
-    constructor() {
-        // for (uint256 i = 1; i< 10; i++){
-        //     for (uint256 j = 1; j< 100; j++){
-        //         encodeString[toString2(i)][toString2(j)] = uint104(1 << j-1);
-        //     }
-        //     encodeString[toString2(i)]["*"] = uint104((1<<104)-1);
-        // }
-        // for (uint16 i = 1; i< 10; i++){
-        //     for (uint16 j = 1; j< 10; j++){
-        //         encodeString[i][j] = uint104(1 << j-1);
-        //     }
-        //     encodeString[i][255] = uint104((1<<104)-1);
-        // }
-    }
+    constructor() {}
 
     function testA(uint256 A) public pure returns (bytes memory) {
         bytes memory result;
@@ -152,31 +139,16 @@ contract DynamicConsent {
         return (result, string(abi.encodePacked(result)));
     }
 
-    function testB(string[] calldata _patientElementChoices) public returns (uint256) {
-        uint256 e = _patientElementChoices.length;
-        bytes memory b;
-        uint16 ce;
-
-        for (uint256 i = 0; i < e; i++) {
-            b = bytes(_patientElementChoices[i]);
-            ce = uint16((uint8(b[0]) - 48) * 1000 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
-            uint16 temp = uint16((uint8(b[1]) - 48));
-            temp *= 100;
-            ce += temp; // need to seperate this out or a bug happens (no idea why)
-
-            // if we haven't seen this category/element yet
-            if (keccak256(bytes(choicesDict[ce])) == EMPTYSTRING) {
-                // keep track of what the string was
-                choicesDict[ce] = _patientElementChoices[i];
-                // add it to element mapping
-                elementsMapping[ce] = 1 << eCounter;
-                // keep track of category=>elements in the same mapping
-                elementsMapping[ce / 100] |= 1 << eCounter;
-                // TODO what happens when eCounter > 256 ... maybe a list of uint256 instead???
-                eCounter++;
-            }
+    function testB(uint16[] memory PatientCategory, uint256 j) public pure returns (bytes32) {
+        bytes32 result;
+        assembly {
+            mstore(0, mload(add(add(PatientCategory, 32), mul(j, 32))))
+            mstore(0x20, choicesDict.slot)
+            result := keccak256(0, 0x40)
+            mstore(0, result)
+            result := keccak256(0, 0x20)
         }
-        return 1;
+        return result;
     }
 
     function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
@@ -633,27 +605,60 @@ contract DynamicConsent {
     //     return l;
     // }
 
-    function getTestA(string memory temp) public pure returns (string memory) {
+    function getTestB(uint16[] memory PatientCategory, uint256 j) public view returns (string memory) {
         string memory entryString = "hooooh";
-        int len;
-        uint dest;
-        uint src;
+        entryString = string.concat(entryString, choicesDict[PatientCategory[j]]);
+        return entryString;
+    }
 
+    function getTestA(uint16[] memory PatientCategory, uint256 j) public view returns (string memory) {
+        string memory entryString = "hooooh";
+        uint dest;
+        bytes32 temp;
+
+        // entryString = string.concat(entryString, choicesDict[PatientCategory[j]])
         assembly {
-            len := mload(temp)
+            // memory dest = end of current entryString
             dest := add(add(entryString, 32), mload(entryString))
-            src := add(temp, 32)
-        }
-        for (; len >= 0; len -= 32) {
-            assembly {
-                mstore(dest, mload(src))
+            // PatientCategory[j]
+            mstore(0, mload(add(add(PatientCategory, 32), mul(j, 32))))
+            // choicesDict[PatientCategory[j]]
+            mstore(0x20, choicesDict.slot)
+            // load the pointer's data
+            temp := sload(keccak256(0, 0x40))
+
+            // check if large string (32+) or small string
+            switch and(temp, 0x01)
+            // small string (temp is the data . length)
+            case 0x00 {
+                // copy data in
+                mstore(dest, temp)
+                // get the length
+                let strlen := div(and(temp, 0xFF), 2)
+                // store the length
+                mstore(entryString, add(mload(entryString), strlen))
+                mstore(0x40, add(dest, strlen))
             }
-            dest += 32;
-            src += 32;
-        }
-        assembly {
-            mstore(entryString, add(mload(entryString), mload(temp)))
-            mstore(0x40, 1000)
+            // large string (temp is the length*2+1)
+            case 0x01 {
+                // get the length
+                let strlen := div(temp, 2)
+                // store the length
+                mstore(entryString, add(mload(entryString), strlen))
+                let i := 0
+                mstore(0, keccak256(0, 0x40))
+                // get the pointer to data
+                temp := keccak256(0, 0x20)
+                // store data 32 bytes at a time
+                for {
+
+                } lt(mul(i, 32), strlen) {
+                    i := add(i, 1)
+                } {
+                    mstore(add(dest, mul(i, 32)), sload(add(temp, i)))
+                }
+                mstore(0x40, add(dest, strlen))
+            }
         }
         return entryString;
     }
@@ -665,11 +670,9 @@ contract DynamicConsent {
         PatientElement = eleChoicesDatabase[globalID];
         uint c = PatientCategory.length;
         uint e = PatientElement.length;
-        string memory temp;
+        bytes32 temp;
 
-        int len;
         uint dest;
-        uint src;
 
         string memory entryString;
 
@@ -677,27 +680,51 @@ contract DynamicConsent {
 
         for (uint j = 0; j < c; j++) {
             // this is needed to not overwrite entryString
-            assembly {
-                mstore(0x40, add(mload(0x40), 64))
-            }
-            temp = choicesDict[PatientCategory[j]];
 
             assembly {
-                len := mload(temp)
+                // memory dest = end of current entryString
                 dest := add(add(entryString, 32), mload(entryString))
-                src := add(temp, 32)
-                mstore(entryString, add(mload(entryString), mload(temp)))
-            }
-            for (; len >= 0; len -= 32) {
-                assembly {
-                    mstore(dest, mload(src))
+                // PatientCategory[j]
+                mstore(0, mload(add(add(PatientCategory, 32), mul(j, 32))))
+                // choicesDict[PatientCategory[j]]
+                mstore(0x20, choicesDict.slot)
+                // load the pointer's data
+                temp := sload(keccak256(0, 0x40))
+
+                // check if large string (32+) or small string
+                switch and(temp, 0x01)
+                // small string (temp is the data . length)
+                case 0x00 {
+                    // copy data in
+                    mstore(dest, temp)
+                    // get the length
+                    let strlen := div(and(temp, 0xFF), 2)
+                    // store the length
+                    mstore(entryString, add(mload(entryString), strlen))
+                    mstore(0x40, add(dest, strlen))
                 }
-                dest += 32;
-                src += 32;
+                // large string (temp is the length*2+1)
+                case 0x01 {
+                    // get the length
+                    let strlen := div(temp, 2)
+                    // store the length
+                    mstore(entryString, add(mload(entryString), strlen))
+                    let i := 0
+                    mstore(0, keccak256(0, 0x40))
+                    // get the pointer to data
+                    temp := keccak256(0, 0x20)
+                    // store data 32 bytes at a time
+                    for {
+
+                    } lt(mul(i, 32), strlen) {
+                        i := add(i, 1)
+                    } {
+                        mstore(add(dest, mul(i, 32)), sload(add(temp, i)))
+                    }
+                    mstore(0x40, add(dest, strlen))
+                }
             }
-            assembly {
-                mstore(0x40, dest)
-            }
+
             if (j < c - 1) {
                 assembly {
                     mstore(add(add(entryString, 32), mload(entryString)), ",")
@@ -712,28 +739,48 @@ contract DynamicConsent {
         }
 
         for (uint j = 0; j < e; j++) {
-            // this is needed to not overwrite entryString
-            // assumes that each string is less than 256 char long
             assembly {
-                mstore(0x40, add(mload(0x40), 256))
-            }
-            temp = choicesDict[PatientElement[j]];
-
-            assembly {
-                len := mload(temp)
+                // memory dest = end of current entryString
                 dest := add(add(entryString, 32), mload(entryString))
-                src := add(temp, 32)
-            }
-            for (; len >= 0; len -= 32) {
-                assembly {
-                    mstore(dest, mload(src))
+                // PatientElement[j]
+                mstore(0, mload(add(add(PatientElement, 32), mul(j, 32))))
+                // choicesDict[PatientElement[j]]
+                mstore(0x20, choicesDict.slot)
+                // load the pointer's data
+                temp := sload(keccak256(0, 0x40))
+
+                // check if large string (32+) or small string
+                switch and(temp, 0x01)
+                // small string (temp is the data . length)
+                case 0x00 {
+                    // copy data in
+                    mstore(dest, temp)
+                    // get the length
+                    let strlen := div(and(temp, 0xFF), 2)
+                    // store the length
+                    mstore(entryString, add(mload(entryString), strlen))
+                    mstore(0x40, add(dest, strlen))
                 }
-                dest += 32;
-                src += 32;
-            }
-            assembly {
-                mstore(entryString, add(mload(entryString), mload(temp)))
-                mstore(0x40, dest)
+                // large string (temp is the length*2+1)
+                case 0x01 {
+                    // get the length
+                    let strlen := div(temp, 2)
+                    // store the length
+                    mstore(entryString, add(mload(entryString), strlen))
+                    let i := 0
+                    mstore(0, keccak256(0, 0x40))
+                    // get the pointer to data
+                    temp := keccak256(0, 0x20)
+                    // store data 32 bytes at a time
+                    for {
+
+                    } lt(mul(i, 32), strlen) {
+                        i := add(i, 1)
+                    } {
+                        mstore(add(dest, mul(i, 32)), sload(add(temp, i)))
+                    }
+                    mstore(0x40, add(dest, strlen))
+                }
             }
             if (j < e - 1) {
                 assembly {
@@ -747,6 +794,7 @@ contract DynamicConsent {
             mstore(add(add(entryString, 32), mload(entryString)), "]\n")
             // why is length of "]\n" equal to 2?
             mstore(entryString, add(mload(entryString), 2))
+            mstore(0x40, add(add(entryString, 32), mload(entryString)))
         }
 
         return entryString;
