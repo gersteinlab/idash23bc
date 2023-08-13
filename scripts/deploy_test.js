@@ -54,7 +54,7 @@ async function main() {
     //     patientqueries[0]["startTimestamp"],
     //     patientqueries[0]["endTimestamp"]
     // )
-    outputstring = await deployedContract.queryForPatient(9319, 3, 1641024390, 1641027409)
+    outputstring = await deployedContract.queryForPatient(9319, 3, 1641024390, 1641027411)
     console.timeEnd("patient query")
     console.log(outputstring)
 
