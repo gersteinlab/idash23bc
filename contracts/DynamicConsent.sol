@@ -527,6 +527,38 @@ contract DynamicConsent {
         return result;
     }
 
+    function binarySearchStart(uint256[] memory array, int256 target) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = array.length;
+
+        while (low < high) {
+            uint256 mid = low + (high - low) / 2; // To avoid potential overflow
+
+            if (int256(entryDatabase[array[mid]].timestamp) < target) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+
+    function binarySearchEnd(uint256[] memory array, int256 target) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = array.length;
+
+        while (low < high) {
+            uint256 mid = low + (high - low) / 2; // To avoid potential overflow
+
+            if (int256(entryDatabase[array[mid]].timestamp) <= target) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        return low - 1;
+    }
+
     /**
      *   Function Description:
      *	Given a patientID, studyID, search start time, and search end time,
@@ -548,10 +580,12 @@ contract DynamicConsent {
         uint256[] memory hits = queryMapping[int(_patientID)][_studyID];
         uint256 h = hits.length;
         string memory result;
-        if (h == 0) {
-            return result;
-        }
+
         unchecked {
+            if (h == 0 || _startTime > int(entryDatabase[hits[h - 1]].timestamp) || _endTime < int(entryDatabase[hits[0]].timestamp)) {
+                return result;
+            }
+
             string memory temp;
 
             int len;
@@ -560,11 +594,49 @@ contract DynamicConsent {
             uint256 i;
             bool init;
 
-            for (i = 0; i < h; i++) {
-                // if hit is valid
-                Entry memory entry = entryDatabase[hits[i]];
-                if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
-                    // result = string.concat(result, getEntryStringA(hits[i]));
+            uint256 startIndex;
+            uint256 endIndex;
+
+            if (h > 10) {
+                // do binary search
+
+                if (_startTime == -1) {
+                    startIndex = 0;
+                } else {
+                    startIndex = binarySearchStart(hits, _startTime);
+                }
+                if (_endTime == -1) {
+                    endIndex = h - 1;
+                } else {
+                    endIndex = binarySearchEnd(hits, _endTime);
+                }
+            } else {
+                // do linear search
+
+                if (_startTime == -1) {
+                    startIndex = 0;
+                } else {
+                    // linear search start
+                    for (startIndex = 0; startIndex < h; startIndex++) {
+                        if (int(entryDatabase[hits[startIndex]].timestamp) >= _startTime) {
+                            break;
+                        }
+                    }
+                }
+                if (_endTime == -1) {
+                    endIndex = h - 1;
+                } else {
+                    // linear search end
+                    for (endIndex = h - 1; endIndex > 0; endIndex--) {
+                        if (int(entryDatabase[hits[endIndex]].timestamp) <= _endTime) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (startIndex < endIndex) {
+                for (i = 0; i <= endIndex - startIndex; i++) {
                     if (!init) {
                         result = getEntryStringA(hits[i]);
                         init = true;
@@ -592,9 +664,49 @@ contract DynamicConsent {
                         }
                     }
                 }
+                return result;
+            } else {
+                if (startIndex == endIndex) {
+                    result = getEntryStringA(hits[startIndex]);
+                }
+                return result;
             }
+
+            // for (i = 0; i < h; i++) {
+            //     // if hit is valid
+            //     Entry memory entry = entryDatabase[hits[i]];
+            //     if ((_startTime == -1 || uint(_startTime) <= entry.timestamp) && (_endTime == -1 || uint(_endTime) >= entry.timestamp)) {
+            //         // result = string.concat(result, getEntryStringA(hits[i]));
+            //         if (!init) {
+            //             result = getEntryStringA(hits[i]);
+            //             init = true;
+            //         } else {
+            //             assembly {
+            //                 mstore(0x40, add(mload(0x40), 64))
+            //             }
+            //             temp = getEntryStringA(hits[i]);
+
+            //             assembly {
+            //                 len := mload(temp)
+            //                 dest := add(add(result, 32), mload(result))
+            //                 src := add(temp, 32)
+            //                 mstore(result, add(mload(result), mload(temp)))
+            //             }
+            //             for (; len >= 0; len -= 32) {
+            //                 assembly {
+            //                     mstore(dest, mload(src))
+            //                 }
+            //                 dest += 32;
+            //                 src += 32;
+            //             }
+            //             assembly {
+            //                 mstore(0x40, dest)
+            //             }
+            //         }
+            //     }
+            // }
         }
-        return result;
+        // return result;
     }
 
     // function getStringLength(string memory A) public pure returns (uint256){
