@@ -701,7 +701,6 @@ contract DynamicConsent {
                     let strlen := div(and(temp, 0xFF), 2)
                     // store the length
                     mstore(entryString, add(mload(entryString), strlen))
-                    mstore(0x40, add(dest, strlen))
                 }
                 // large string (temp is the length*2+1)
                 case 0x01 {
@@ -721,7 +720,6 @@ contract DynamicConsent {
                     } {
                         mstore(add(dest, mul(i, 32)), sload(add(temp, i)))
                     }
-                    mstore(0x40, add(dest, strlen))
                 }
             }
 
@@ -759,7 +757,6 @@ contract DynamicConsent {
                     let strlen := div(and(temp, 0xFF), 2)
                     // store the length
                     mstore(entryString, add(mload(entryString), strlen))
-                    mstore(0x40, add(dest, strlen))
                 }
                 // large string (temp is the length*2+1)
                 case 0x01 {
@@ -779,7 +776,6 @@ contract DynamicConsent {
                     } {
                         mstore(add(dest, mul(i, 32)), sload(add(temp, i)))
                     }
-                    mstore(0x40, add(dest, strlen))
                 }
             }
             if (j < e - 1) {
