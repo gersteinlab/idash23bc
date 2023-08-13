@@ -605,12 +605,6 @@ contract DynamicConsent {
     //     return l;
     // }
 
-    function getTestB(uint16[] memory PatientCategory, uint256 j) public view returns (string memory) {
-        string memory entryString = "hooooh";
-        entryString = string.concat(entryString, choicesDict[PatientCategory[j]]);
-        return entryString;
-    }
-
     function getTestA(uint16[] memory PatientCategory, uint256 j) public view returns (string memory) {
         string memory entryString = "hooooh";
         uint dest;
