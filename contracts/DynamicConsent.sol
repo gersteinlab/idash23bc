@@ -63,10 +63,54 @@ contract DynamicConsent {
     mapping(uint16 => string) public choicesDict;
     // choice name => choice ID
     mapping(string => uint16) choicesLookup;
+    // studyID => patientIDs
+    mapping(uint256 => int256[]) study2patients;
 
     // TODO make everything that shouldn't be public not public
 
     constructor() {}
+
+    function getLatestIDs2(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
+        int256[] memory patients = study2patients[_studyID];
+        uint256 h = patients.length;
+        uint i;
+        latestIDs = new uint256[](h);
+        uint256 mostRecentIndex;
+        uint count;
+        uint256[] storage ptr;
+        unchecked {
+            if (_endTime == -1) {
+                for (i = 0; i < h; i++) {
+                    ptr = queryMapping[int(patients[i])][int(_studyID)];
+                    mostRecentIndex = ptr.length - 1;
+                    latestIDs[i] = ptr[mostRecentIndex];
+                }
+                assembly {
+                    mstore(latestIDs, h)
+                }
+                pIDList = patients;
+            } else {
+                pIDList = new int256[](h);
+                for (i = 0; i < h; i++) {
+                    ptr = queryMapping[int(patients[i])][int(_studyID)];
+                    if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
+                        for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
+                            if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
+                                break;
+                            }
+                        }
+                        latestIDs[count] = ptr[mostRecentIndex];
+                        pIDList[count] = patients[i];
+                        count++;
+                    }
+                }
+                assembly {
+                    mstore(latestIDs, count)
+                    mstore(pIDList, count)
+                }
+            }
+        }
+    }
 
     function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
         unchecked {
@@ -113,7 +157,6 @@ contract DynamicConsent {
                     patientCounter++;
                     assembly {
                         // store patient ID in list to keep track of which ones we've added
-                        mstore(pIDList, patientCounter)
                         mstore(add(pIDList, mul(patientCounter, 32)), pID)
 
                         // store their latest globalID in return array
@@ -126,6 +169,7 @@ contract DynamicConsent {
                 return (EMPTYARRAY, pIDList);
             }
             assembly {
+                mstore(pIDList, patientCounter)
                 mstore(latestIDs, patientCounter)
             }
             return (latestIDs, pIDList);
@@ -248,6 +292,11 @@ contract DynamicConsent {
                 }
             }
 
+            if (queryMapping[int(_patientID)][int(_studyID)].length == 0) {
+                // check whether the patient id has been linked to the study id
+                study2patients[_studyID].push(int(_patientID));
+            }
+
             // For all possible queries of patient ID and study ID, append globalID to querymap
             queryMapping[int(_patientID)][int(_studyID)].push(gCounter);
             queryMapping[-1][int(_studyID)].push(gCounter);
@@ -284,7 +333,7 @@ contract DynamicConsent {
         unchecked {
             uint256[] memory LatestIDs;
             int256[] memory pIDList;
-            (LatestIDs, pIDList) = getLatestIDs(_studyID, _endTime);
+            (LatestIDs, pIDList) = getLatestIDs2(_studyID, _endTime);
             uint256 h = LatestIDs.length;
             if (h == 0) {
                 return EMPTYARRAY;
@@ -305,10 +354,12 @@ contract DynamicConsent {
                     resultCounter++;
                     pID = pIDList[i];
                     assembly {
-                        mstore(result, resultCounter)
                         mstore(add(result, mul(resultCounter, 32)), pID)
                     }
                 }
+            }
+            assembly {
+                mstore(result, resultCounter)
             }
             if (resultCounter == 0) {
                 return EMPTYARRAY;
@@ -431,6 +482,7 @@ contract DynamicConsent {
 
             if (startIndex < endIndex) {
                 for (i = 0; i <= endIndex - startIndex; i++) {
+                    // result = string.concat(result, getEntryStringA(hits[i]))
                     if (!init) {
                         result = getEntryStringA(hits[i]);
                         init = true;
@@ -457,6 +509,7 @@ contract DynamicConsent {
                             mstore(0x40, dest)
                         }
                     }
+                    // end
                 }
                 return result;
             } else {
@@ -599,7 +652,7 @@ contract DynamicConsent {
         return entryString;
     }
 
-    function getCategoryIndex(string[] calldata _CategoryChoices) public pure returns (uint16[] memory) {
+    function getCategoryIndex(string[] memory _CategoryChoices) public pure returns (uint16[] memory) {
         uint256 n = _CategoryChoices.length;
         uint16[] memory Category_index = new uint16[](n);
         for (uint256 i = 0; i < n; i++) {
@@ -609,7 +662,7 @@ contract DynamicConsent {
         return Category_index;
     }
 
-    function getElementIndex(string[] calldata _ElementChoices) public pure returns (uint16[] memory) {
+    function getElementIndex(string[] memory _ElementChoices) public pure returns (uint16[] memory) {
         uint256 n = _ElementChoices.length;
         uint16[] memory Element_index = new uint16[](n);
 
