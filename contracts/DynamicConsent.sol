@@ -158,6 +158,7 @@ contract DynamicConsent {
                     assembly {
                         // store patient ID in list to keep track of which ones we've added
                         mstore(add(pIDList, mul(patientCounter, 32)), pID)
+                        mstore(pIDList, patientCounter)
 
                         // store their latest globalID in return array
                         // latestIDs[patientCounter]
@@ -169,7 +170,6 @@ contract DynamicConsent {
                 return (EMPTYARRAY, pIDList);
             }
             assembly {
-                mstore(pIDList, patientCounter)
                 mstore(latestIDs, patientCounter)
             }
             return (latestIDs, pIDList);
@@ -257,7 +257,10 @@ contract DynamicConsent {
         string[] calldata _patientElementChoices
     ) public {
         // Store entry in entryDatabase
-        entryDatabase[gCounter] = Entry({patientID: int(_patientID), studyID: int(_studyID), timestamp: _recordTime});
+        int256 iPatientID = int(_patientID);
+        int256 iStudyID = int(_studyID);
+
+        entryDatabase[gCounter] = Entry({patientID: iPatientID, studyID: iStudyID, timestamp: _recordTime});
 
         uint256 c = _patientCategoryChoices.length;
         uint256 e = _patientElementChoices.length;
@@ -292,16 +295,16 @@ contract DynamicConsent {
                 }
             }
 
-            if (queryMapping[int(_patientID)][int(_studyID)].length == 0) {
+            if (queryMapping[iPatientID][iStudyID].length == 0) {
                 // check whether the patient id has been linked to the study id
                 study2patients[_studyID].push(int(_patientID));
             }
 
             // For all possible queries of patient ID and study ID, append globalID to querymap
-            queryMapping[int(_patientID)][int(_studyID)].push(gCounter);
-            queryMapping[-1][int(_studyID)].push(gCounter);
-            queryMapping[int(_patientID)][-1].push(gCounter);
-            queryMapping[-1][-1].push(gCounter);
+            queryMapping[iPatientID][iStudyID].push(gCounter);
+            queryMapping[-1][iStudyID].push(gCounter);
+            queryMapping[iPatientID][-1].push(gCounter);
+            // queryMapping[-1][-1].push(gCounter);
             gCounter++;
         }
     }

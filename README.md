@@ -8,7 +8,7 @@
 git clone this repo, then:
 
 ```
-cd idash22bc
+cd idash23bc
 yarn
 ```
 
