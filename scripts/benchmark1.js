@@ -14,7 +14,7 @@ async function main() {
     let consents = JSON.parse(fs.readFileSync(path.join("./Release", "consents", folder.toString(), "training_data.json")))
 
     let researcherqueries = JSON.parse(fs.readFileSync(path.join("./Release", "test_meaningful_researcher_queries.json")))
-    let patientqueries = JSON.parse(fs.readFileSync(path.join("./Release", "test_patient_queries2.json")))
+    let patientqueries = JSON.parse(fs.readFileSync(path.join("./Release", "test_patient_queries3.json")))
 
     console.time("insertion")
     for (let [i, consent] of tdqm(consents.entries(), { total: 3689 })) {

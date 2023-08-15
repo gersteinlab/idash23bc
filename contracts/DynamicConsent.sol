@@ -71,6 +71,7 @@ contract DynamicConsent {
     constructor() {}
 
     function getLatestIDs2(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
+        // get unique list of patients for given study
         int256[] memory patients = study2patients[_studyID];
         uint256 h = patients.length;
         uint i;
@@ -80,20 +81,21 @@ contract DynamicConsent {
         uint256[] storage ptr;
         unchecked {
             if (_endTime == -1) {
+                // if no endtime restriction, latest ID is patient's last ID for that study
                 for (i = 0; i < h; i++) {
                     ptr = queryMapping[int(patients[i])][int(_studyID)];
                     mostRecentIndex = ptr.length - 1;
                     latestIDs[i] = ptr[mostRecentIndex];
                 }
-                assembly {
-                    mstore(latestIDs, h)
-                }
                 pIDList = patients;
             } else {
+                // new patient ID list to filter out the ones that don't have an entry before endtime
                 pIDList = new int256[](h);
                 for (i = 0; i < h; i++) {
                     ptr = queryMapping[int(patients[i])][int(_studyID)];
+                    // if patient's first entry isn't before endtime, skip
                     if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
+                        // if valid, then reverse linear search until we find most recent entry on or before endtime
                         for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
                             if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
                                 break;
@@ -104,6 +106,7 @@ contract DynamicConsent {
                         count++;
                     }
                 }
+                // adjusting the array size has to be done in assembly
                 assembly {
                     mstore(latestIDs, count)
                     mstore(pIDList, count)
@@ -266,9 +269,10 @@ contract DynamicConsent {
         uint256 e = _patientElementChoices.length;
         bytes memory b;
         uint16 ce;
+        uint i;
 
         unchecked {
-            for (uint256 i = 0; i < c; i++) {
+            for (i = 0; i < c; i++) {
                 b = bytes(_patientCategoryChoices[i]);
                 // convert category/element string to int: ex "11_05" becomes 1105
                 ce = uint16((uint8(b[0]) - 48) * 10 + (uint8(b[1]) - 48));
@@ -282,7 +286,7 @@ contract DynamicConsent {
                 }
             }
 
-            for (uint256 i = 0; i < e; i++) {
+            for (i = 0; i < e; i++) {
                 b = bytes(_patientElementChoices[i]);
                 ce = uint16((uint8(b[0]) - 48) * 1000 + (uint16((uint8(b[1]) - 48)) * 1000) / 10 + (uint8(b[3]) - 48) * 10 + (uint8(b[4]) - 48));
 
@@ -297,14 +301,14 @@ contract DynamicConsent {
 
             if (queryMapping[iPatientID][iStudyID].length == 0) {
                 // check whether the patient id has been linked to the study id
-                study2patients[_studyID].push(int(_patientID));
+                study2patients[_studyID].push(iPatientID);
             }
 
             // For all possible queries of patient ID and study ID, append globalID to querymap
             queryMapping[iPatientID][iStudyID].push(gCounter);
-            queryMapping[-1][iStudyID].push(gCounter);
+            // queryMapping[-1][iStudyID].push(gCounter); // this isn't needed for getLatestIDs2
             queryMapping[iPatientID][-1].push(gCounter);
-            // queryMapping[-1][-1].push(gCounter);
+            // queryMapping[-1][-1].push(gCounter); // this is never used for anything
             gCounter++;
         }
     }
@@ -336,15 +340,16 @@ contract DynamicConsent {
         unchecked {
             uint256[] memory LatestIDs;
             int256[] memory pIDList;
+            // this gets a table of latest IDs for each patient in the study up to endtime
             (LatestIDs, pIDList) = getLatestIDs2(_studyID, _endTime);
             uint256 h = LatestIDs.length;
             if (h == 0) {
                 return EMPTYARRAY;
             }
             uint256 resultCounter;
-            int256 pID;
             result = new uint256[](LatestIDs.length);
 
+            // convert every element/category to int
             uint16[] memory RequestCategory = getCategoryIndex(_requestedCategoryChoices);
             uint16[] memory RequestElement = getElementIndex(_requestedElementChoices);
 
@@ -355,9 +360,8 @@ contract DynamicConsent {
                 PatientElement = eleChoicesDatabase[LatestIDs[i]];
                 if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
                     resultCounter++;
-                    pID = pIDList[i];
                     assembly {
-                        mstore(add(result, mul(resultCounter, 32)), pID)
+                        mstore(add(result, mul(resultCounter, 32)), mload(add(add(pIDList, 32), mul(i, 32))))
                     }
                 }
             }
@@ -375,9 +379,11 @@ contract DynamicConsent {
     function binarySearchStart(uint256[] memory array, int256 target) public view returns (uint256) {
         uint256 low = 0;
         uint256 high = array.length;
+        uint256 mid;
+
         unchecked {
             while (low < high) {
-                uint256 mid = low + (high - low) / 2; // To avoid potential overflow
+                mid = low + (high - low) / 2; // To avoid potential overflow
 
                 if (int256(entryDatabase[array[mid]].timestamp) < target) {
                     low = mid + 1;
@@ -392,10 +398,11 @@ contract DynamicConsent {
     function binarySearchEnd(uint256[] memory array, int256 target) public view returns (uint256) {
         uint256 low = 0;
         uint256 high = array.length;
+        uint256 mid;
 
         unchecked {
             while (low < high) {
-                uint256 mid = low + (high - low) / 2; // To avoid potential overflow
+                mid = low + (high - low) / 2; // To avoid potential overflow
 
                 if (int256(entryDatabase[array[mid]].timestamp) <= target) {
                     low = mid + 1;
