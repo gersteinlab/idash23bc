@@ -17,5 +17,7 @@ yarn
 test script
 ```
 yarn hardhat run scripts/deploy_test.js
+yarn hardhat run scripts/benchmark1.js
+yarn hardhat test
 ```
 

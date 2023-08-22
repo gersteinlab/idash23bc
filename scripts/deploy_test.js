@@ -54,14 +54,13 @@ async function main() {
     //     patientqueries[0]["startTimestamp"],
     //     patientqueries[0]["endTimestamp"]
     // )
-    outputstring = await deployedContract.queryForPatient(9319, 3, 1641024390, 1641027411)
+    outputstring = await deployedContract.queryForPatient(9319, 3, 1641027410, 1641027410)
     console.timeEnd("patient query")
     console.log(outputstring)
 
     const used = process.memoryUsage().heapUsed / 1024 / 1024
     console.log(`The script uses approximately ${Math.round(used * 100) / 100} MB`)
 }
-
 // main
 main()
     .then(() => process.exit(0))

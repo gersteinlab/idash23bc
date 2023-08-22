@@ -437,7 +437,7 @@ contract DynamicConsent {
         string memory result;
 
         unchecked {
-            if (h == 0 || _startTime > int(entryDatabase[hits[h - 1]].timestamp) || _endTime < int(entryDatabase[hits[0]].timestamp)) {
+            if (h == 0 || _startTime > int(entryDatabase[hits[h - 1]].timestamp) || ((_endTime < int(entryDatabase[hits[0]].timestamp)) && _endTime != -1)) {
                 return result;
             }
 
@@ -494,13 +494,13 @@ contract DynamicConsent {
                 for (i = 0; i <= endIndex - startIndex; i++) {
                     // result = string.concat(result, getEntryStringA(hits[i]))
                     if (!init) {
-                        result = getEntryStringA(hits[i]);
+                        result = getEntryStringA(hits[startIndex + i]);
                         init = true;
                     } else {
                         assembly {
                             mstore(0x40, add(mload(0x40), 64))
                         }
-                        temp = getEntryStringA(hits[i]);
+                        temp = getEntryStringA(hits[startIndex + i]);
 
                         assembly {
                             len := mload(temp)
@@ -662,7 +662,7 @@ contract DynamicConsent {
         return entryString;
     }
 
-    function getCategoryIndex(string[] memory _CategoryChoices) public pure returns (uint16[] memory) {
+    function getCategoryIndex(string[] calldata _CategoryChoices) internal pure returns (uint16[] memory) {
         uint256 n = _CategoryChoices.length;
         uint16[] memory Category_index = new uint16[](n);
         for (uint256 i = 0; i < n; i++) {
@@ -672,7 +672,7 @@ contract DynamicConsent {
         return Category_index;
     }
 
-    function getElementIndex(string[] memory _ElementChoices) public pure returns (uint16[] memory) {
+    function getElementIndex(string[] calldata _ElementChoices) internal pure returns (uint16[] memory) {
         uint256 n = _ElementChoices.length;
         uint16[] memory Element_index = new uint16[](n);
 
