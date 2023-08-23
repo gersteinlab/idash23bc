@@ -384,6 +384,15 @@ describe("rquery testset 3 (more latestIDs)", function () {
         console.log("Contract deployed")
 
         console.time("insertion")
+
+        await deployedContract.storeRecord(111, 123, 50, ["01_testcat"], [])
+        await deployedContract.storeRecord(222, 123, 50, ["01_testcat"], [])
+        await deployedContract.storeRecord(333, 123, 50, ["01_testcat"], [])
+        await deployedContract.storeRecord(444, 123, 50, ["01_testcat"], [])
+        await deployedContract.storeRecord(555, 123, 50, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
+        await deployedContract.storeRecord(666, 123, 50, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
+        await deployedContract.storeRecord(777, 123, 50, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
+
         await deployedContract.storeRecord(111, 123, 100, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
         await deployedContract.storeRecord(222, 123, 100, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
         await deployedContract.storeRecord(333, 123, 100, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
@@ -419,6 +428,26 @@ describe("rquery testset 3 (more latestIDs)", function () {
 
         let regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
         let expectedIDs = [111, 222, 333, 444]
+        assert.equal(regularIntList, expectedIDs.toString())
+    })
+
+    it("Test researcher query 3", async function () {
+        console.time("researcher query")
+        let patientIDs = await deployedContract.queryForResearcher(123, 200, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
+        console.timeEnd("researcher query")
+
+        let regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
+        let expectedIDs = [555, 666, 777]
+        assert.equal(regularIntList, expectedIDs.toString())
+    })
+
+    it("Test researcher query 4", async function () {
+        console.time("researcher query")
+        let patientIDs = await deployedContract.queryForResearcher(123, 67, ["01_testcat"], ["02_01_testele1", "02_02_testele2"])
+        console.timeEnd("researcher query")
+
+        let regularIntList = patientIDs.map((bigintValue) => parseInt(bigintValue.toString()))
+        let expectedIDs = [555, 666, 777]
         assert.equal(regularIntList, expectedIDs.toString())
     })
 })

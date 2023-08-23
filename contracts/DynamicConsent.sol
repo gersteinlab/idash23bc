@@ -70,177 +70,6 @@ contract DynamicConsent {
 
     constructor() {}
 
-    function getLatestIDs2(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
-        // get unique list of patients for given study
-        int256[] memory patients = study2patients[_studyID];
-        uint256 h = patients.length;
-        uint i;
-        latestIDs = new uint256[](h);
-        uint256 mostRecentIndex;
-        uint count;
-        uint256[] storage ptr;
-        unchecked {
-            if (_endTime == -1) {
-                // if no endtime restriction, latest ID is patient's last ID for that study
-                for (i = 0; i < h; i++) {
-                    ptr = queryMapping[int(patients[i])][int(_studyID)];
-                    mostRecentIndex = ptr.length - 1;
-                    latestIDs[i] = ptr[mostRecentIndex];
-                }
-                pIDList = patients;
-            } else {
-                // new patient ID list to filter out the ones that don't have an entry before endtime
-                pIDList = new int256[](h);
-                for (i = 0; i < h; i++) {
-                    ptr = queryMapping[int(patients[i])][int(_studyID)];
-                    // if patient's first entry isn't before endtime, skip
-                    if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
-                        // if valid, then reverse linear search until we find most recent entry on or before endtime
-                        for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
-                            if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
-                                break;
-                            }
-                        }
-                        latestIDs[count] = ptr[mostRecentIndex];
-                        pIDList[count] = patients[i];
-                        count++;
-                    }
-                }
-                // adjusting the array size has to be done in assembly
-                assembly {
-                    mstore(latestIDs, count)
-                    mstore(pIDList, count)
-                }
-            }
-        }
-    }
-
-    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
-        unchecked {
-            uint256[] memory hits = queryMapping[-1][int(_studyID)];
-
-            uint256 h = hits.length;
-            int256 pID;
-            uint256 i;
-            uint256 j;
-
-            if (h == 0) {
-                return (EMPTYARRAY, pIDList);
-            }
-
-            // restrict by endtime first
-            if (_endTime != -1) {
-                while (int256(entryDatabase[hits[h - 1]].timestamp) > _endTime) {
-                    h--;
-                    if (h == 0) {
-                        return (EMPTYARRAY, pIDList);
-                    }
-                }
-            }
-
-            // allocate memory for 2 arrays
-            latestIDs = new uint256[](h);
-            pIDList = new int256[](h);
-            // int256[] memory pIDList;
-            bool processed = false;
-            uint256 patientCounter;
-
-            for (i = h; i > 0; i--) {
-                pID = entryDatabase[hits[i - 1]].patientID;
-                processed = false;
-                // check if added this patient already
-                for (j = 0; j < pIDList.length; j++) {
-                    if (pID == pIDList[j]) {
-                        processed = true;
-                        break;
-                    }
-                }
-
-                if (!processed) {
-                    patientCounter++;
-                    assembly {
-                        // store patient ID in list to keep track of which ones we've added
-                        mstore(add(pIDList, mul(patientCounter, 32)), pID)
-                        mstore(pIDList, patientCounter)
-
-                        // store their latest globalID in return array
-                        // latestIDs[patientCounter]
-                        mstore(add(latestIDs, mul(patientCounter, 32)), mload(add(hits, mul(i, 0x20))))
-                    }
-                }
-            }
-            if (patientCounter == 0) {
-                return (EMPTYARRAY, pIDList);
-            }
-            assembly {
-                mstore(latestIDs, patientCounter)
-            }
-            return (latestIDs, pIDList);
-        }
-    }
-
-    // perform log base 10
-    // from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/math/Math.sol
-    function log10(uint256 value) internal pure returns (uint256) {
-        uint256 result = 0;
-        unchecked {
-            if (value >= 10 ** 64) {
-                value /= 10 ** 64;
-                result += 64;
-            }
-            if (value >= 10 ** 32) {
-                value /= 10 ** 32;
-                result += 32;
-            }
-            if (value >= 10 ** 16) {
-                value /= 10 ** 16;
-                result += 16;
-            }
-            if (value >= 10 ** 8) {
-                value /= 10 ** 8;
-                result += 8;
-            }
-            if (value >= 10 ** 4) {
-                value /= 10 ** 4;
-                result += 4;
-            }
-            if (value >= 10 ** 2) {
-                value /= 10 ** 2;
-                result += 2;
-            }
-            if (value >= 10 ** 1) {
-                result += 1;
-            }
-        }
-        return result;
-    }
-
-    // convert uint256 to string
-    // from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Strings.sol
-    bytes16 private constant _SYMBOLS = "0123456789abcdef";
-
-    function toString(uint256 value) public pure returns (string memory) {
-        unchecked {
-            uint256 length = log10(value) + 1;
-            string memory buffer = new string(length);
-            uint256 ptr;
-            /// @solidity memory-safe-assembly
-            assembly {
-                ptr := add(buffer, add(32, length))
-            }
-            while (true) {
-                ptr--;
-                /// @solidity memory-safe-assembly
-                assembly {
-                    mstore8(ptr, byte(mod(value, 10), _SYMBOLS))
-                }
-                value /= 10;
-                if (value == 0) break;
-            }
-            return buffer;
-        }
-    }
-
     /**
      *   Function Description:
      *	Given a patientID, studyID, recordTime, consented category choices, and consented element choices,
@@ -306,7 +135,7 @@ contract DynamicConsent {
 
             // For all possible queries of patient ID and study ID, append globalID to querymap
             queryMapping[iPatientID][iStudyID].push(gCounter);
-            // queryMapping[-1][iStudyID].push(gCounter); // this isn't needed for getLatestIDs2
+            // queryMapping[-1][iStudyID].push(gCounter); // this isn't needed for getLatestIDs
             queryMapping[iPatientID][-1].push(gCounter);
             // queryMapping[-1][-1].push(gCounter); // this is never used for anything
             gCounter++;
@@ -341,7 +170,7 @@ contract DynamicConsent {
             uint256[] memory LatestIDs;
             int256[] memory pIDList;
             // this gets a table of latest IDs for each patient in the study up to endtime
-            (LatestIDs, pIDList) = getLatestIDs2(_studyID, _endTime);
+            (LatestIDs, pIDList) = getLatestIDs(_studyID, _endTime);
             uint256 h = LatestIDs.length;
             if (h == 0) {
                 return EMPTYARRAY;
@@ -358,7 +187,7 @@ contract DynamicConsent {
             for (uint256 i = 0; i < h; i++) {
                 PatientCategory = catChoicesDatabase[LatestIDs[i]];
                 PatientElement = eleChoicesDatabase[LatestIDs[i]];
-                if (isMatchSimple(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
+                if (isMatch(PatientCategory, RequestCategory, PatientElement, RequestElement)) {
                     resultCounter++;
                     assembly {
                         mstore(add(result, mul(resultCounter, 32)), mload(add(add(pIDList, 32), mul(i, 32))))
@@ -374,44 +203,6 @@ contract DynamicConsent {
         }
 
         return result;
-    }
-
-    function binarySearchStart(uint256[] memory array, int256 target) public view returns (uint256) {
-        uint256 low = 0;
-        uint256 high = array.length;
-        uint256 mid;
-
-        unchecked {
-            while (low < high) {
-                mid = low + (high - low) / 2; // To avoid potential overflow
-
-                if (int256(entryDatabase[array[mid]].timestamp) < target) {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-        }
-        return low;
-    }
-
-    function binarySearchEnd(uint256[] memory array, int256 target) public view returns (uint256) {
-        uint256 low = 0;
-        uint256 high = array.length;
-        uint256 mid;
-
-        unchecked {
-            while (low < high) {
-                mid = low + (high - low) / 2; // To avoid potential overflow
-
-                if (int256(entryDatabase[array[mid]].timestamp) <= target) {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-        }
-        return low - 1;
     }
 
     /**
@@ -492,15 +283,15 @@ contract DynamicConsent {
 
             if (startIndex < endIndex) {
                 for (i = 0; i <= endIndex - startIndex; i++) {
-                    // result = string.concat(result, getEntryStringA(hits[i]))
+                    // result = string.concat(result, getEntryString(hits[i]))
                     if (!init) {
-                        result = getEntryStringA(hits[startIndex + i]);
+                        result = getEntryString(hits[startIndex + i]);
                         init = true;
                     } else {
                         assembly {
                             mstore(0x40, add(mload(0x40), 64))
                         }
-                        temp = getEntryStringA(hits[startIndex + i]);
+                        temp = getEntryString(hits[startIndex + i]);
 
                         assembly {
                             len := mload(temp)
@@ -524,14 +315,162 @@ contract DynamicConsent {
                 return result;
             } else {
                 if (startIndex == endIndex) {
-                    result = getEntryStringA(hits[startIndex]);
+                    result = getEntryString(hits[startIndex]);
                 }
                 return result;
             }
         }
     }
 
-    function getEntryStringA(uint256 globalID) public view returns (string memory) {
+    // given a studyID and endTime, retrieve all globalIDs that match the latest
+    // entry for each patient up to that endTime for that studyID
+    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
+        // get unique list of patients for given study
+        int256[] memory patients = study2patients[_studyID];
+        uint256 h = patients.length;
+        uint i;
+        latestIDs = new uint256[](h);
+        uint256 mostRecentIndex;
+        uint count;
+        uint256[] storage ptr;
+        unchecked {
+            if (_endTime == -1) {
+                // if no endtime restriction, latest ID is patient's last ID for that study
+                for (i = 0; i < h; i++) {
+                    ptr = queryMapping[int(patients[i])][int(_studyID)];
+                    mostRecentIndex = ptr.length - 1;
+                    latestIDs[i] = ptr[mostRecentIndex];
+                }
+                pIDList = patients;
+            } else {
+                // new patient ID list to filter out the ones that don't have an entry before endtime
+                pIDList = new int256[](h);
+                for (i = 0; i < h; i++) {
+                    ptr = queryMapping[int(patients[i])][int(_studyID)];
+                    // if patient's first entry isn't before endtime, skip
+                    if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
+                        // if valid, then reverse linear search until we find most recent entry on or before endtime
+                        for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
+                            if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
+                                break;
+                            }
+                        }
+                        latestIDs[count] = ptr[mostRecentIndex];
+                        pIDList[count] = patients[i];
+                        count++;
+                    }
+                }
+                // adjusting the array size has to be done in assembly
+                assembly {
+                    mstore(latestIDs, count)
+                    mstore(pIDList, count)
+                }
+            }
+        }
+    }
+
+    // perform log base 10
+    // from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/math/Math.sol
+    function log10(uint256 value) internal pure returns (uint256) {
+        uint256 result = 0;
+        unchecked {
+            if (value >= 10 ** 64) {
+                value /= 10 ** 64;
+                result += 64;
+            }
+            if (value >= 10 ** 32) {
+                value /= 10 ** 32;
+                result += 32;
+            }
+            if (value >= 10 ** 16) {
+                value /= 10 ** 16;
+                result += 16;
+            }
+            if (value >= 10 ** 8) {
+                value /= 10 ** 8;
+                result += 8;
+            }
+            if (value >= 10 ** 4) {
+                value /= 10 ** 4;
+                result += 4;
+            }
+            if (value >= 10 ** 2) {
+                value /= 10 ** 2;
+                result += 2;
+            }
+            if (value >= 10 ** 1) {
+                result += 1;
+            }
+        }
+        return result;
+    }
+
+    // convert uint256 to string
+    // from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Strings.sol
+    bytes16 private constant _SYMBOLS = "0123456789abcdef";
+
+    function toString(uint256 value) public pure returns (string memory) {
+        unchecked {
+            uint256 length = log10(value) + 1;
+            string memory buffer = new string(length);
+            uint256 ptr;
+            /// @solidity memory-safe-assembly
+            assembly {
+                ptr := add(buffer, add(32, length))
+            }
+            while (true) {
+                ptr--;
+                /// @solidity memory-safe-assembly
+                assembly {
+                    mstore8(ptr, byte(mod(value, 10), _SYMBOLS))
+                }
+                value /= 10;
+                if (value == 0) break;
+            }
+            return buffer;
+        }
+    }
+
+    function binarySearchStart(uint256[] memory array, int256 target) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = array.length;
+        uint256 mid;
+
+        unchecked {
+            while (low < high) {
+                mid = low + (high - low) / 2; // To avoid potential overflow
+
+                if (int256(entryDatabase[array[mid]].timestamp) < target) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+        }
+        return low;
+    }
+
+    function binarySearchEnd(uint256[] memory array, int256 target) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = array.length;
+        uint256 mid;
+
+        unchecked {
+            while (low < high) {
+                mid = low + (high - low) / 2; // To avoid potential overflow
+
+                if (int256(entryDatabase[array[mid]].timestamp) <= target) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+        }
+        return low - 1;
+    }
+
+    // return formatted string for one entry, for patient query
+    function getEntryString(uint256 globalID) public view returns (string memory) {
         uint16[] memory PatientCategory;
         uint16[] memory PatientElement;
         PatientCategory = catChoicesDatabase[globalID];
@@ -662,6 +601,7 @@ contract DynamicConsent {
         return entryString;
     }
 
+    // category string to int
     function getCategoryIndex(string[] calldata _CategoryChoices) internal pure returns (uint16[] memory) {
         uint256 n = _CategoryChoices.length;
         uint16[] memory Category_index = new uint16[](n);
@@ -672,6 +612,7 @@ contract DynamicConsent {
         return Category_index;
     }
 
+    // element string to int
     function getElementIndex(string[] calldata _ElementChoices) internal pure returns (uint16[] memory) {
         uint256 n = _ElementChoices.length;
         uint16[] memory Element_index = new uint16[](n);
@@ -761,7 +702,7 @@ contract DynamicConsent {
         return difference;
     }
 
-    function isMatchSimple(
+    function isMatch(
         uint16[] memory PatientCategory,
         uint16[] memory RequestCategory,
         uint16[] memory PatientElement,
