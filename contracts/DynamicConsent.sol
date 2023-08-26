@@ -326,42 +326,47 @@ contract DynamicConsent {
         // get unique list of patients for given study
         int256[] memory patients = study2patients[_studyID];
         uint256 h = patients.length;
-        uint i;
-        latestIDs = new uint256[](h);
-        uint256 mostRecentIndex;
-        uint count;
-        uint256[] storage ptr;
-        unchecked {
-            if (_endTime == -1) {
-                // if no endtime restriction, latest ID is patient's last ID for that study
-                for (i = 0; i < h; i++) {
-                    ptr = queryMapping[int(patients[i])][int(_studyID)];
-                    mostRecentIndex = ptr.length - 1;
-                    latestIDs[i] = ptr[mostRecentIndex];
-                }
-                pIDList = patients;
-            } else {
-                // new patient ID list to filter out the ones that don't have an entry before endtime
-                pIDList = new int256[](h);
-                for (i = 0; i < h; i++) {
-                    ptr = queryMapping[int(patients[i])][int(_studyID)];
-                    // if patient's first entry isn't before endtime, skip
-                    if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
-                        // if valid, then reverse linear search until we find most recent entry on or before endtime
-                        for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
-                            if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
-                                break;
-                            }
-                        }
-                        latestIDs[count] = ptr[mostRecentIndex];
-                        pIDList[count] = patients[i];
-                        count++;
+        if (h == 0) {
+            latestIDs = EMPTYARRAY;
+            pIDList = patients;
+        } else {
+            uint i;
+            latestIDs = new uint256[](h);
+            uint256 mostRecentIndex;
+            uint count;
+            uint256[] storage ptr;
+            unchecked {
+                if (_endTime == -1) {
+                    // if no endtime restriction, latest ID is patient's last ID for that study
+                    for (i = 0; i < h; i++) {
+                        ptr = queryMapping[int(patients[i])][int(_studyID)];
+                        mostRecentIndex = ptr.length - 1;
+                        latestIDs[i] = ptr[mostRecentIndex];
                     }
-                }
-                // adjusting the array size has to be done in assembly
-                assembly {
-                    mstore(latestIDs, count)
-                    mstore(pIDList, count)
+                    pIDList = patients;
+                } else {
+                    // new patient ID list to filter out the ones that don't have an entry before endtime
+                    pIDList = new int256[](h);
+                    for (i = 0; i < h; i++) {
+                        ptr = queryMapping[int(patients[i])][int(_studyID)];
+                        // if patient's first entry isn't before endtime, skip
+                        if (int256(entryDatabase[ptr[0]].timestamp) <= _endTime) {
+                            // if valid, then reverse linear search until we find most recent entry on or before endtime
+                            for (mostRecentIndex = ptr.length - 1; mostRecentIndex > 0; mostRecentIndex--) {
+                                if (int256(entryDatabase[ptr[mostRecentIndex]].timestamp) <= _endTime) {
+                                    break;
+                                }
+                            }
+                            latestIDs[count] = ptr[mostRecentIndex];
+                            pIDList[count] = patients[i];
+                            count++;
+                        }
+                    }
+                    // adjusting the array size has to be done in assembly
+                    assembly {
+                        mstore(latestIDs, count)
+                        mstore(pIDList, count)
+                    }
                 }
             }
         }
@@ -641,7 +646,7 @@ contract DynamicConsent {
             }
             uint256 aIndex = 0;
             uint256 bIndex = 0;
-            while (aIndex < a.length && bIndex < b.length) {
+            while (aIndex < aLength && bIndex < bLength) {
                 if (a[aIndex] < b[bIndex]) {
                     // If an element from 'a' is smaller than the current element in 'b',
                     // it cannot exist in 'b', and 'a' is not a subset of 'b'
@@ -653,14 +658,14 @@ contract DynamicConsent {
                 bIndex++;
             }
             // If we reached the end of 'a', then all elements in 'a' have been found in 'b'
-            return aIndex == a.length;
+            return aIndex == aLength;
         }
     }
 
     function getDifference(uint256[] memory a, uint256[] memory b) public pure returns (uint256[] memory) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
-        uint256[] memory difference = new uint256[](a.length);
+        uint256[] memory difference = new uint256[](aLength);
         uint count = 0;
         uint256 i = 0;
         uint256 j = 0;

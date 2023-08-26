@@ -108,6 +108,30 @@ describe("pquery testset 1 (start/end time)", function () {
         }
         assert.equal(outputstring, expectedString)
     })
+
+    it("Test patient query 6", async function () {
+        console.time("patient query")
+        outputstring = await deployedContract.queryForPatient(42, 231, -1, -1)
+        console.timeEnd("patient query")
+        let expectedString = ""
+        assert.equal(outputstring, expectedString)
+    })
+
+    it("Test patient query 7", async function () {
+        console.time("patient query")
+        outputstring = await deployedContract.queryForPatient(42, 67, 333, -1)
+        console.timeEnd("patient query")
+        let expectedString = ""
+        assert.equal(outputstring, expectedString)
+    })
+
+    it("Test patient query 8", async function () {
+        console.time("patient query")
+        outputstring = await deployedContract.queryForPatient(42, 67, -1, 82)
+        console.timeEnd("patient query")
+        let expectedString = ""
+        assert.equal(outputstring, expectedString)
+    })
 })
 
 describe("rquery testset 1 (matching)", function () {
