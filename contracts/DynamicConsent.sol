@@ -3,7 +3,7 @@
 pragma solidity >=0.8.12;
 
 /*
- * Team Name:
+ * Team Name: Gerstein Lab
  *
  *   Team Member 1:
  *       { Name: Eric Ni, Email: eric.ni@yale.edu }
@@ -51,24 +51,24 @@ contract DynamicConsent {
     // mappings
 
     // globalID=> entry
-    mapping(uint256 => Entry) public entryDatabase;
+    mapping(uint256 => Entry) entryDatabase;
     // globalID => choices
-    mapping(uint256 => uint256[]) public catChoicesDatabase;
-    mapping(uint256 => uint256[]) public eleChoicesDatabase;
+    mapping(uint256 => uint256[]) catChoicesDatabase;
+    mapping(uint256 => uint256[]) eleChoicesDatabase;
 
     // patientID => studyID => list of globalID
     mapping(int256 => mapping(int256 => uint256[])) queryMapping;
 
     // choice ID => choice name
-    mapping(uint256 => string) public choicesDict;
+    mapping(uint256 => string) choicesDict;
     // choice name => choice ID
     mapping(string => uint256) choicesLookup;
     // studyID => patientIDs
     mapping(uint256 => int256[]) study2patients;
 
-    // TODO make everything that shouldn't be public not public
-
     constructor() {}
+
+    // MAIN FUNCTIONS
 
     /**
      *   Function Description:
@@ -260,7 +260,6 @@ contract DynamicConsent {
                 if (_startTime == -1) {
                     startIndex = 0;
                 } else {
-                    // linear search start
                     for (startIndex = 0; startIndex < h; startIndex++) {
                         if (int(entryDatabase[hits[startIndex]].timestamp) >= _startTime) {
                             break;
@@ -270,7 +269,6 @@ contract DynamicConsent {
                 if (_endTime == -1) {
                     endIndex = h - 1;
                 } else {
-                    // linear search end
                     for (endIndex = h - 1; endIndex > 0; endIndex--) {
                         if (int(entryDatabase[hits[endIndex]].timestamp) <= _endTime) {
                             break;
@@ -320,9 +318,11 @@ contract DynamicConsent {
         }
     }
 
+    // HELPER FUNCTIONS
+
     // given a studyID and endTime, retrieve all globalIDs that match the latest
     // entry for each patient up to that endTime for that studyID
-    function getLatestIDs(uint256 _studyID, int256 _endTime) public view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
+    function getLatestIDs(uint256 _studyID, int256 _endTime) internal view returns (uint256[] memory latestIDs, int256[] memory pIDList) {
         // get unique list of patients for given study
         int256[] memory patients = study2patients[_studyID];
         uint256 h = patients.length;
@@ -412,7 +412,7 @@ contract DynamicConsent {
     // from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Strings.sol
     bytes16 private constant _SYMBOLS = "0123456789abcdef";
 
-    function toString(uint256 value) public pure returns (string memory) {
+    function toString(uint256 value) internal pure returns (string memory) {
         unchecked {
             uint256 length = log10(value) + 1;
             string memory buffer = new string(length);
@@ -434,7 +434,7 @@ contract DynamicConsent {
         }
     }
 
-    function binarySearchStart(uint256[] memory array, int256 target) public view returns (uint256) {
+    function binarySearchStart(uint256[] memory array, int256 target) internal view returns (uint256) {
         uint256 low = 0;
         uint256 high = array.length;
         uint256 mid;
@@ -453,7 +453,7 @@ contract DynamicConsent {
         return low;
     }
 
-    function binarySearchEnd(uint256[] memory array, int256 target) public view returns (uint256) {
+    function binarySearchEnd(uint256[] memory array, int256 target) internal view returns (uint256) {
         uint256 low = 0;
         uint256 high = array.length;
         uint256 mid;
@@ -473,7 +473,7 @@ contract DynamicConsent {
     }
 
     // return formatted string for one entry, for patient query
-    function getEntryString(uint256 globalID) public view returns (string memory) {
+    function getEntryString(uint256 globalID) internal view returns (string memory) {
         uint256[] memory PatientCategory;
         uint256[] memory PatientElement;
         PatientCategory = catChoicesDatabase[globalID];
@@ -637,7 +637,7 @@ contract DynamicConsent {
     }
 
     // Function to check if array 'a' is a subset of array 'b' assuming 'a' and 'b' are both sorted
-    function isSubset(uint256[] memory a, uint256[] memory b) public pure returns (bool) {
+    function isSubset(uint256[] memory a, uint256[] memory b) internal pure returns (bool) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
         unchecked {
@@ -662,7 +662,7 @@ contract DynamicConsent {
         }
     }
 
-    function getDifference(uint256[] memory a, uint256[] memory b) public pure returns (uint256[] memory) {
+    function getDifference(uint256[] memory a, uint256[] memory b) internal pure returns (uint256[] memory) {
         uint256 aLength = a.length;
         uint256 bLength = b.length;
         uint256[] memory difference = new uint256[](aLength);
@@ -705,12 +705,13 @@ contract DynamicConsent {
         return difference;
     }
 
+    // given a list of encoded patient/query requests/elements, return if patient matches request
     function isMatch(
         uint256[] memory PatientCategory,
         uint256[] memory RequestCategory,
         uint256[] memory PatientElement,
         uint256[] memory RequestElement
-    ) public pure returns (bool) {
+    ) internal pure returns (bool) {
         // all the inputs are lists of strings
         if (isSubset(RequestCategory, PatientCategory) == false) {
             return false;
